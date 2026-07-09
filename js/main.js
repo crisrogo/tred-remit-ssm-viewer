@@ -2,7 +2,7 @@
 // Loads per-phase mesh JSON, morphs the mean shape toward a selected branch with a slider,
 // colours each vertex by how far it moves, and lets you rotate / zoom and hide surfaces.
 import * as THREE from './vendor/three.module.js';
-import { OrbitControls } from './vendor/OrbitControls.js';
+import { TrackballControls } from './vendor/TrackballControls.js';
 
 const DATA = './data';
 const EPI_OPACITY = 0.22;
@@ -68,9 +68,15 @@ function setupScene() {
   renderer.setSize(view.clientWidth, view.clientHeight);
   view.appendChild(renderer.domElement);
 
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
+  // TrackballControls: free rotation in any direction (no pole "wall"), with a little
+  // inertia so a flick keeps the heart spinning.
+  controls = new TrackballControls(camera, renderer.domElement);
+  controls.rotateSpeed = 3.0;
+  controls.zoomSpeed = 1.2;
+  controls.panSpeed = 0.8;
+  controls.staticMoving = false;
+  controls.dynamicDampingFactor = 0.12;
+  controls.handleResize();
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x404050, 1.0));
   const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(1, 1, 2); scene.add(key);
@@ -85,6 +91,7 @@ function onResize() {
   camera.aspect = view.clientWidth / view.clientHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(view.clientWidth, view.clientHeight);
+  if (controls) controls.handleResize();
 }
 
 function animate() {
