@@ -5,9 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TRED / REMIT cardiac SSM viewer</title>
 <link rel="stylesheet" href="./css/style.css">
-<!-- OrbitControls imports from 'three'; the import map resolves it to the vendored build. -->
-<script type="importmap">
-{ "imports": { "three": "./js/vendor/three.module.js" } }
+<!-- Surface any load/runtime error on the page (module-import failures, blocked file://
+     fetches, WebGL problems) instead of failing silently on "Loading…". -->
+<script>
+  window.__ssmReady = false;
+  function __note(msg) {
+    var n = document.getElementById('note');
+    if (n) { n.textContent = msg; n.style.color = '#e08080'; }
+  }
+  window.addEventListener('error', function (e) {
+    __note('Error: ' + (e.message || (e.error && e.error.message) || ('failed to load ' + (e.filename || 'a script'))));
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    __note('Error: ' + (e.reason && (e.reason.message || e.reason)));
+  });
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      var n = document.getElementById('note');
+      if (!window.__ssmReady && n && /Loading/.test(n.textContent)) {
+        __note('App did not start. Open the browser console (F12) for the error. Make sure you are viewing over http(s) (a web server or GitHub Pages), not a file:// path, in a recent browser.');
+      }
+    }, 4000);
+  });
 </script>
 </head>
 <body>

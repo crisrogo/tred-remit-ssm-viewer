@@ -1,7 +1,7 @@
 // TRED / REMIT cardiac SSM viewer.
 // Loads per-phase mesh JSON, morphs the mean shape toward a selected branch with a slider,
 // colours each vertex by how far it moves, and lets you rotate / zoom and hide surfaces.
-import * as THREE from 'three';
+import * as THREE from './vendor/three.module.js';
 import { OrbitControls } from './vendor/OrbitControls.js';
 
 const DATA = './data';
@@ -14,34 +14,56 @@ let scene, camera, renderer, controls, radius = 100;
 let tagObjects = {};   // tag -> { mesh, mean:Float32Array, delta:Float32Array, isEpi }
 let maxDisp = 1;       // shared displacement scale for the current item (mm)
 
-init();
+init().catch(showFatal);
 
 async function init() {
-  manifest = await (await fetch(`${DATA}/manifest.json`)).json();
+  manifest = await fetchJSON(`${DATA}/manifest.json`);
   document.title = manifest.title || document.title;
   [low, high] = manifest.colormap.map(hexToRgb);
   document.getElementById('cbar').style.background =
     `linear-gradient(90deg, ${manifest.colormap[0]}, ${manifest.colormap[1]})`;
 
-  setupScene();
+  // Build the controls FIRST, so the panel is usable even if WebGL or data fail.
   buildPhaseToggle();
   buildSlider();
   document.getElementById('item').addEventListener('change', e => selectItem(e.target.value));
   document.getElementById('reset').addEventListener('click', frameCamera);
 
+  if (!setupScene()) return;  // WebGL check; shows a message if unavailable
+
   const firstPhase = ['ES', 'ED'].find(p => manifest.phases[p]?.available);
   await selectPhase(firstPhase);
+  window.__ssmReady = true;
   animate();
+}
+
+async function fetchJSON(url) {
+  let r;
+  try { r = await fetch(url); }
+  catch (e) { throw new Error(`Cannot fetch ${url}. Open the page over http(s), not a file:// path.`); }
+  if (!r.ok) throw new Error(`${url} returned HTTP ${r.status}`);
+  return r.json();
+}
+
+function showFatal(err) {
+  console.error(err);
+  const n = document.getElementById('note');
+  if (n) { n.textContent = 'Error: ' + (err && err.message || err); n.style.color = '#e08080'; }
 }
 
 // ---- scene ---------------------------------------------------------------
 function setupScene() {
   const view = document.getElementById('view');
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+  } catch (e) {
+    showFatal(new Error('WebGL is not available in this browser or session. Try a recent Chrome/Firefox with hardware acceleration on.'));
+    return false;
+  }
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x14161b);
 
   camera = new THREE.PerspectiveCamera(35, view.clientWidth / view.clientHeight, 0.1, 5000);
-  renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(view.clientWidth, view.clientHeight);
   view.appendChild(renderer.domElement);
@@ -55,6 +77,7 @@ function setupScene() {
   const fill = new THREE.DirectionalLight(0xffffff, 0.5); fill.position.set(-1, -1, -1); scene.add(fill);
 
   window.addEventListener('resize', onResize);
+  return true;
 }
 
 function onResize() {
