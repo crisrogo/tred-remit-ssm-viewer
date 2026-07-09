@@ -2,7 +2,6 @@
 // Loads per-phase mesh JSON, morphs the mean shape toward a selected branch with a slider,
 // colours each vertex by how far it moves, and lets you rotate / zoom and hide surfaces.
 import * as THREE from './vendor/three.module.js';
-import { TrackballControls } from './vendor/TrackballControls.js';
 
 const DATA = './data';
 const EPI_OPACITY = 0.22;
@@ -10,7 +9,10 @@ const EPI_OPACITY = 0.22;
 let manifest, low, high;
 const phaseCache = {};
 const state = { phase: null, item: null, t: 1 };
-let scene, camera, renderer, controls, radius = 100;
+let scene, camera, renderer, radius = 100;
+let pivot;                       // all meshes live here; we rotate this, not the camera
+const spin = { vx: 0, vy: 0 };   // leftover angular velocity for inertia
+let dragging = false;
 let tagObjects = {};   // tag -> { mesh, mean:Float32Array, delta:Float32Array, isEpi }
 let maxDisp = 1;       // shared displacement scale for the current item (mm)
 
@@ -68,15 +70,9 @@ function setupScene() {
   renderer.setSize(view.clientWidth, view.clientHeight);
   view.appendChild(renderer.domElement);
 
-  // TrackballControls: free rotation in any direction (no pole "wall"), with a little
-  // inertia so a flick keeps the heart spinning.
-  controls = new TrackballControls(camera, renderer.domElement);
-  controls.rotateSpeed = 3.0;
-  controls.zoomSpeed = 1.2;
-  controls.panSpeed = 0.8;
-  controls.staticMoving = false;
-  controls.dynamicDampingFactor = 0.12;
-  controls.handleResize();
+  pivot = new THREE.Group();
+  scene.add(pivot);
+  installControls(renderer.domElement);
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x404050, 1.0));
   const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(1, 1, 2); scene.add(key);
@@ -91,20 +87,60 @@ function onResize() {
   camera.aspect = view.clientWidth / view.clientHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(view.clientWidth, view.clientHeight);
-  if (controls) controls.handleResize();
+}
+
+// Custom controller: rotate the mesh group about screen axes with no limit, so dragging
+// up keeps tumbling the heart over the apex/base indefinitely. A flick leaves inertia.
+function installControls(dom) {
+  const ROT = 0.007;                 // radians per pixel dragged
+  dom.style.touchAction = 'none';
+  let lx = 0, ly = 0;
+  dom.addEventListener('pointerdown', e => {
+    dragging = true; lx = e.clientX; ly = e.clientY; spin.vx = spin.vy = 0;
+    dom.setPointerCapture(e.pointerId);
+  });
+  const end = e => { dragging = false; try { dom.releasePointerCapture(e.pointerId); } catch (_) {} };
+  dom.addEventListener('pointerup', end);
+  dom.addEventListener('pointercancel', end);
+  dom.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = (e.clientX - lx) * ROT, dy = (e.clientY - ly) * ROT;
+    lx = e.clientX; ly = e.clientY;
+    rotatePivot(dx, dy);
+    spin.vx = dx; spin.vy = dy;      // remember last motion for release inertia
+  });
+  dom.addEventListener('wheel', e => {
+    e.preventDefault();
+    camera.position.multiplyScalar(Math.exp(e.deltaY * 0.001));
+    const d = camera.position.length();
+    if (d < radius * 1.2) camera.position.setLength(radius * 1.2);
+    if (d > radius * 15) camera.position.setLength(radius * 15);
+  }, { passive: false });
+}
+
+const _qy = new THREE.Quaternion(), _qx = new THREE.Quaternion();
+const _AX = new THREE.Vector3(1, 0, 0), _AY = new THREE.Vector3(0, 1, 0);
+function rotatePivot(dx, dy) {
+  _qy.setFromAxisAngle(_AY, dx);      // horizontal drag -> spin about world Y
+  _qx.setFromAxisAngle(_AX, dy);      // vertical drag   -> tumble about world X
+  pivot.quaternion.premultiply(_qy).premultiply(_qx);  // world-axis => screen-relative, unbounded
 }
 
 function animate() {
   requestAnimationFrame(animate);
-  controls.update();
+  if (!dragging && (Math.abs(spin.vx) > 1e-4 || Math.abs(spin.vy) > 1e-4)) {
+    rotatePivot(spin.vx, spin.vy);
+    spin.vx *= 0.94; spin.vy *= 0.94;
+  }
   renderer.render(scene, camera);
 }
 
 function frameCamera() {
   camera.position.set(0, 0, radius * 3.1);
   camera.near = radius / 100; camera.far = radius * 20; camera.updateProjectionMatrix();
-  controls.target.set(0, 0, 0);
-  controls.update();
+  camera.lookAt(0, 0, 0);
+  if (pivot) pivot.quaternion.identity();
+  spin.vx = spin.vy = 0;
 }
 
 // ---- panel ---------------------------------------------------------------
@@ -169,7 +205,7 @@ async function selectPhase(phase) {
   setActivePhaseButton(phase);
 
   // clear previous meshes
-  for (const t in tagObjects) scene.remove(tagObjects[t].mesh);
+  for (const t in tagObjects) pivot.remove(tagObjects[t].mesh);
   tagObjects = {};
 
   const tags = Object.keys(data.tags);
@@ -205,7 +241,7 @@ function buildTagMesh(tag, entry) {
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.renderOrder = isEpi ? 1 : 0;
-  scene.add(mesh);
+  pivot.add(mesh);
   tagObjects[tag] = { mesh, mean, delta: new Float32Array(mean.length), isEpi };
 }
 
