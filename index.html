@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TRED / REMIT cardiac SSM viewer</title>
+<link rel="stylesheet" href="./css/style.css">
+<!-- OrbitControls imports from 'three'; the import map resolves it to the vendored build. -->
+<script type="importmap">
+{ "imports": { "three": "./js/vendor/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <aside id="panel">
+    <h1>Cardiac SSM viewer</h1>
+    <p class="sub">TRED / REMIT ortho-tree branches</p>
+
+    <div class="group">
+      <span class="lbl">Phase</span>
+      <div id="phase-toggle" class="seg"></div>
+    </div>
+
+    <div class="group">
+      <label class="lbl" for="item">Branch</label>
+      <select id="item"></select>
+    </div>
+
+    <div class="group">
+      <label class="lbl" for="morph">Morph: mean &rarr; <span id="morph-val">1.00&times;</span></label>
+      <input id="morph" type="range">
+      <div class="ticks"><span>mean</span><span>branch</span><span>exaggerated</span></div>
+    </div>
+
+    <div class="group">
+      <span class="lbl">Surfaces</span>
+      <div id="tags"></div>
+    </div>
+
+    <div class="group">
+      <span class="lbl">Displacement from mean</span>
+      <div id="cbar"></div>
+      <div class="ticks"><span>0</span><span id="cbar-max">&ndash;</span></div>
+    </div>
+
+    <button id="reset">Reset view</button>
+    <p id="note" class="note">Loading&hellip;</p>
+  </aside>
+  <main id="view"></main>
+</div>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>

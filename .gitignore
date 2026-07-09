@@ -1,0 +1,11 @@
+# OS / editor
+.DS_Store
+*.swp
+
+# Python
+__pycache__/
+*.pyc
+
+# Local shot meshes / working data (only the generated data/*.json is tracked)
+*.vtk
+branch_mean_*_scores.csv

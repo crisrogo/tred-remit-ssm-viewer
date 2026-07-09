@@ -1,0 +1,40 @@
+{
+  "phases": {
+    "ED": {
+      "available": false,
+      "items": []
+    },
+    "ES": {
+      "available": true,
+      "items": [
+        "Branch_0",
+        "Branch_1",
+        "Branch_2",
+        "Branch_3",
+        "Branch_4",
+        "cohort_mean_233"
+      ]
+    }
+  },
+  "tags": [
+    "LV_endo",
+    "RV_FW",
+    "RV_septum",
+    "aorta_valve",
+    "epi",
+    "mitral_valve",
+    "pulmonary_valve",
+    "tricuspid_valve"
+  ],
+  "colormap": [
+    "#7A5E8A",
+    "#F5E740"
+  ],
+  "slider": {
+    "min": 0,
+    "max": 3,
+    "step": 0.05,
+    "default": 1.0
+  },
+  "title": "TRED / REMIT cardiac SSM viewer"
+}
