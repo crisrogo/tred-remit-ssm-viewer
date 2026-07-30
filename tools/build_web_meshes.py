@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 """
-Convert shot SSM branch meshes (VTK) into the compact JSON the web viewer loads.
+Convert shot SSM meshes (VTK) into the compact JSON the web viewer loads.
 
-For one phase (ED or ES) this reads the geodesic-shooting output meshes
-(Shooting_<i>__...aligned_<tag>__tp_10__...vtk), and, per surface tag, writes the triangle
-faces once, the template (mean) vertices, and each item's vertices. All shapes are shot from
-the same template, so topology is shared and the viewer can morph mean -> item per vertex.
+A phase (ED or ES) can carry two kinds of items:
+  - branches: the ortho-tree branch-mean shapes (unidirectional, mean -> branch),
+  - modes:    a PCA shape mode swept to +/- n_sd (bidirectional, -SD .. mean .. +SD).
 
-Shooting index -> item name (from the branch-mean export):
-  0 = template (the mean; t=0 reference), 1..5 = Branch_0..4, 6 = cohort_mean_233.
+Branch meshes come from a branch-mean shooting (Shooting_0 = mean/template,
+Shooting_1.. = Branch_0.., last = cohort_mean_233). Mode meshes come from a mode-sweep
+shooting (Shooting_0 = mean, Shooting_2k-1 / 2k = mode k at -n_sd / +n_sd SD). All shapes are
+shot from the same SSM template, so topology is shared and the viewer morphs per vertex.
 
 Output:
-  data/<PHASE>.json     one phase's geometry
-  data/manifest.json    merged index of phases / items / tags / colourmap / slider
+  data/<PHASE>.json     one phase's geometry (tags -> faces, mean, branches{}, modes{})
+  data/manifest.json    merged index of phases / branches / modes / colourmap
 
 Run (system python3 with pyvista):
-  python3 tools/build_web_meshes.py \
-      --mesh_dir /media/croderog/Bob/shape_analysis/TRED_REMIT/DDRTree_EDES_ortho/branch_meshes \
-      --phase ES --out_dir data
+  python3 tools/build_web_meshes.py --phase ES \
+      --branch_dir /media/.../DDRTree_EDES_ortho/branch_meshes \
+      --mode_dir   /media/.../DDRTree_EDES_ortho/mode_scores_ES --out_dir data
+  python3 tools/build_web_meshes.py --phase ED \
+      --mode_dir   /media/.../DDRTree_EDES_ortho/mode_scores_ED --out_dir data
 """
 from __future__ import annotations
 
@@ -30,10 +33,10 @@ import re
 import numpy as np
 import pyvista as pv
 
-# Shooting index -> item label (must match export_branch_mean_*_scores.py row order).
-_INDEX_ITEM = {0: "template", 1: "Branch_0", 2: "Branch_1", 3: "Branch_2",
-               4: "Branch_3", 5: "Branch_4", 6: "cohort_mean_233"}
-_CMAP = ["#7A5E8A", "#F5E740"]  # project displacement anchors: low -> high
+# Branch shooting index -> item label (from export_branch_mean_es_scores.py).
+_BRANCH_ITEM = {1: "Branch_0", 2: "Branch_1", 3: "Branch_2", 4: "Branch_3",
+                5: "Branch_4", 6: "cohort_mean_233"}
+_CMAP = ["#7A5E8A", "#F5E740"]  # displacement anchors: low -> high
 
 
 def _tag(path):
@@ -47,54 +50,87 @@ def _index(path):
 
 
 def _faces(mesh):
-    """Flat triangle index list from a pyvista PolyData (all cells triangles)."""
     f = mesh.faces.reshape(-1, 4)
     assert (f[:, 0] == 3).all(), "non-triangle face encountered"
     return f[:, 1:].astype(int).ravel().tolist()
 
 
-def build_phase(mesh_dir, phase, out_dir, decimals=3):
+def _read_dir(mesh_dir):
+    """tag -> {shooting_index -> pyvista mesh} for Shooting_*tp_10*.vtk in a dir."""
     files = sorted(glob.glob(os.path.join(mesh_dir, "Shooting_*tp_10*.vtk")))
     if not files:
-        raise SystemExit(f"No Shooting_*tp_10*.vtk meshes in {mesh_dir}")
-
-    # group: tag -> {index -> mesh}
+        raise SystemExit(f"No Shooting_*tp_10*.vtk in {mesh_dir}")
     by_tag = {}
     for f in files:
         by_tag.setdefault(_tag(f), {})[_index(f)] = pv.read(f)
-    tags = sorted(by_tag)
-    print(f"[{phase}] tags: {tags}")
+    return by_tag
 
-    # Global centroid + radius from the template (index 0) across all tags, for centring
-    # and camera framing.
-    all_tmpl = np.vstack([by_tag[t][0].points for t in tags])
+
+def build_phase(phase, branch_dir, mode_dir, out_dir, scale=20, n_sd=3.0):
+    branch = _read_dir(branch_dir) if branch_dir else None
+    mode = _read_dir(mode_dir) if mode_dir else None
+    ref = mode if mode is not None else branch
+    if ref is None:
+        raise SystemExit("Provide at least one of --branch_dir / --mode_dir")
+    tags = sorted(ref)
+    print(f"[{phase}] tags: {tags}; branches={branch is not None}, modes={mode is not None}")
+
+    # Centre + radius from the template (index 0) across all tags.
+    all_tmpl = np.vstack([ref[t][0].points for t in tags])
     centroid = all_tmpl.mean(axis=0)
     radius = float(np.linalg.norm(all_tmpl - centroid, axis=1).max())
 
-    item_indices = sorted(i for i in _INDEX_ITEM if i != 0 and any(i in by_tag[t] for t in tags))
-    items = [_INDEX_ITEM[i] for i in item_indices]
+    # Store the mean shape as float, and each item as INTEGER displacement from the mean
+    # (units of 1/scale mm). Most vertices barely move, so the deltas are tiny integers and
+    # the JSON stays small; the viewer reconstructs pos = mean + t * delta / scale.
+    tpl = {t: ref[t][0].points for t in tags}
+
+    def mean_flat(t):
+        return (tpl[t] - centroid).round(2).ravel().tolist()
+
+    def delta_int(t, pts):
+        return ((pts - tpl[t]) * scale).round().astype(int).ravel().tolist()
 
     tags_out = {}
     for t in tags:
-        tmpl = (by_tag[t][0].points - centroid).round(decimals)
-        entry = {"faces": _faces(by_tag[t][0]), "mean": tmpl.ravel().tolist(), "items": {}}
-        for i in item_indices:
-            if i in by_tag[t]:
-                v = (by_tag[t][i].points - centroid).round(decimals)
-                entry["items"][_INDEX_ITEM[i]] = v.ravel().tolist()
+        entry = {"faces": _faces(ref[t][0]), "mean": mean_flat(t)}
+        npts = ref[t][0].n_points
+        if branch is not None and t in branch:
+            entry["branches"] = {}
+            for i, name in _BRANCH_ITEM.items():
+                if i in branch[t] and branch[t][i].n_points == npts:
+                    entry["branches"][name] = delta_int(t, branch[t][i].points)
+        if mode is not None and t in mode:
+            entry["modes"] = {}
+            for idx, m in mode[t].items():
+                if idx == 0 or m.n_points != npts:
+                    continue
+                k = (idx + 1) // 2                     # 1,2->1 ; 3,4->2 ; ...
+                sign = "minus" if idx % 2 == 1 else "plus"
+                entry["modes"].setdefault(str(k), {})[sign] = delta_int(t, m.points)
         tags_out[t] = entry
-        print(f"  {t:<16} {by_tag[t][0].n_points} pts, {len(entry['items'])} items")
 
-    phase_json = {"phase": phase, "radius": round(radius, 3),
-                  "items": items, "tags": tags_out}
+    branch_list = [_BRANCH_ITEM[i] for i in sorted(_BRANCH_ITEM)
+                   if branch is not None and any(i in branch[t] for t in tags)]
+    mode_set = set()
+    if mode is not None:
+        for t in tags:
+            mode_set.update(int(k) for k in tags_out[t].get("modes", {}))
+    mode_list = sorted(mode_set)
+    print(f"  branches: {branch_list}")
+    print(f"  modes: {len(mode_list)} ({mode_list[:5]}{'...' if len(mode_list) > 5 else ''})")
+
+    phase_json = {"phase": phase, "radius": round(radius, 3), "n_sd": n_sd,
+                  "scale": scale, "branches": branch_list, "modes": mode_list, "tags": tags_out}
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, f"{phase}.json"), "w") as fh:
         json.dump(phase_json, fh)
-    print(f"  wrote {out_dir}/{phase}.json")
+    mb = os.path.getsize(os.path.join(out_dir, f"{phase}.json")) / 1e6
+    print(f"  wrote {out_dir}/{phase}.json ({mb:.1f} MB)")
 
-    # Merge the manifest (keep other phases; scaffold known phases without data).
+    # Merge manifest (keep the other phase; scaffold both known phases).
     man_path = os.path.join(out_dir, "manifest.json")
-    manifest = {"phases": {}, "tags": tags, "colormap": _CMAP,
+    manifest = {"phases": {}, "colormap": _CMAP,
                 "slider": {"min": 0, "max": 3, "step": 0.05, "default": 1.0},
                 "title": "TRED / REMIT cardiac SSM viewer"}
     if os.path.exists(man_path):
@@ -102,9 +138,9 @@ def build_phase(mesh_dir, phase, out_dir, decimals=3):
             manifest.update(json.load(fh))
     manifest.setdefault("phases", {})
     for p in ("ED", "ES"):
-        manifest["phases"].setdefault(p, {"available": False, "items": []})
-    manifest["phases"][phase] = {"available": True, "items": items}
-    manifest["tags"] = tags
+        manifest["phases"].setdefault(p, {"available": False, "branches": [], "modes": []})
+    manifest["phases"][phase] = {"available": True, "branches": branch_list,
+                                 "modes": mode_list, "n_sd": n_sd}
     manifest["colormap"] = _CMAP
     manifest["slider"] = {"min": 0, "max": 3, "step": 0.05, "default": 1.0}
     with open(man_path, "w") as fh:
@@ -115,11 +151,13 @@ def build_phase(mesh_dir, phase, out_dir, decimals=3):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--mesh_dir", required=True, help="dir of Shooting_*tp_10*.vtk meshes")
     ap.add_argument("--phase", required=True, choices=["ED", "ES"])
-    ap.add_argument("--out_dir", default="data", help="viewer data dir (default: data)")
+    ap.add_argument("--branch_dir", default=None, help="dir of branch-mean Shooting_*tp_10*.vtk")
+    ap.add_argument("--mode_dir", default=None, help="dir of mode-sweep Shooting_*tp_10*.vtk")
+    ap.add_argument("--n_sd", type=float, default=3.0, help="SD the mode meshes were shot at")
+    ap.add_argument("--out_dir", default="data")
     args = ap.parse_args(argv)
-    build_phase(args.mesh_dir, args.phase, args.out_dir)
+    build_phase(args.phase, args.branch_dir, args.mode_dir, args.out_dir, n_sd=args.n_sd)
     return 0
 
 

@@ -41,14 +41,19 @@
     </div>
 
     <div class="group">
-      <label class="lbl" for="item">Branch</label>
+      <span class="lbl">Show</span>
+      <div id="view-toggle" class="seg"></div>
+    </div>
+
+    <div class="group">
+      <label class="lbl" for="item" id="item-label">Branch</label>
       <select id="item"></select>
     </div>
 
     <div class="group">
       <label class="lbl" for="morph">Morph: mean &rarr; <span id="morph-val">1.00&times;</span></label>
       <input id="morph" type="range">
-      <div class="ticks"><span>mean</span><span>branch</span><span>exaggerated</span></div>
+      <div class="ticks" id="morph-ticks"><span>mean</span><span>shape</span><span>exaggerated</span></div>
     </div>
 
     <div class="group">
@@ -64,10 +69,10 @@
 
     <button id="reset">Reset view</button>
     <p id="note" class="note">Loading&hellip;</p>
-    <p class="ver">build 3 &middot; free rotation</p>
+    <p class="ver">build 4 &middot; branches + modes</p>
   </aside>
   <main id="view"></main>
 </div>
-<script type="module" src="./js/main.js?v=3"></script>
+<script type="module" src="./js/main.js?v=4"></script>
 </body>
 </html>

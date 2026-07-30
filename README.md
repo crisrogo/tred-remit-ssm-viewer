@@ -1,11 +1,12 @@
 # TRED / REMIT cardiac SSM viewer
 
 An interactive, static web viewer for the cardiac statistical shape model. Pick a phase
-(end-diastole or end-systole) and a branch of the combined ortho DDRTree, see the mean
-biventricular mesh, and drag a slider to morph the mean toward that branch. Each vertex is
-coloured by how far it moves (purple = little, yellow = most), so regions that change more
-stand out. Rotate and zoom freely, and hide individual surfaces (LV endo, RV free wall,
-septum, epicardium, valves).
+(end-diastole or end-systole) and either an ortho-tree **branch** or a PCA **shape mode**,
+see the mean biventricular mesh, and drag a slider to deform it: branches morph mean -> branch
+(0..3x), modes sweep -3 SD .. mean .. +3 SD. Each vertex is coloured by how far it moves
+(purple = little, yellow = most). Rotate freely (no pole limit), zoom, and hide individual
+surfaces (LV endo, RV free wall, septum, epicardium, valves). A URL hash deep-links a view,
+e.g. `#ES/modes/5/2` (phase ES, mode 5 at +2 SD).
 
 It is a single static page (Three.js, no build step) and runs on GitHub Pages.
 
@@ -63,7 +64,12 @@ The geometry JSON is generated from geodesic-shooting output meshes. To populate
    ```
 3. Copy the endpoint (`tp_10`) meshes to a folder, then convert:
    ```bash
-   python3 tools/build_web_meshes.py --mesh_dir /path/to/ED_branch_meshes --phase ED --out_dir data
+   # branches and/or modes for a phase (each dir optional):
+   python3 tools/build_web_meshes.py --phase ED \
+       --branch_dir /path/to/ED_branch_meshes \
+       --mode_dir   /path/to/ED_mode_meshes --out_dir data
+   # Mode meshes are shot from mode-deviation score vectors: generate them with
+   # DDRTree/export_mode_scores.py --phase ED, shoot with shape_analysis/shoot_branch_mean_shapes.py.
    ```
 4. Commit `data/ED.json` and the updated `data/manifest.json`, and push.
 

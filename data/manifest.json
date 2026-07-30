@@ -1,31 +1,67 @@
 {
   "phases": {
     "ED": {
-      "available": false,
-      "items": []
+      "available": true,
+      "branches": [],
+      "modes": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "n_sd": 3.0
     },
     "ES": {
       "available": true,
-      "items": [
+      "branches": [
         "Branch_0",
         "Branch_1",
         "Branch_2",
         "Branch_3",
         "Branch_4",
         "cohort_mean_233"
-      ]
+      ],
+      "modes": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "n_sd": 3.0
     }
   },
-  "tags": [
-    "LV_endo",
-    "RV_FW",
-    "RV_septum",
-    "aorta_valve",
-    "epi",
-    "mitral_valve",
-    "pulmonary_valve",
-    "tricuspid_valve"
-  ],
   "colormap": [
     "#7A5E8A",
     "#F5E740"
@@ -36,5 +72,15 @@
     "step": 0.05,
     "default": 1.0
   },
-  "title": "TRED / REMIT cardiac SSM viewer"
+  "title": "TRED / REMIT cardiac SSM viewer",
+  "tags": [
+    "LV_endo",
+    "RV_FW",
+    "RV_septum",
+    "aorta_valve",
+    "epi",
+    "mitral_valve",
+    "pulmonary_valve",
+    "tricuspid_valve"
+  ]
 }
