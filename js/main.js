@@ -33,7 +33,11 @@ async function init() {
     state.t = +e.target.value; updateSliderLabel(); updateMorph();
   });
 
-  if (!setupScene()) return;
+  if (!setupScene()) {
+    // No 3D scene: disable the phase buttons so clicks can't hit an uninitialised scene.
+    document.querySelectorAll('#phase-toggle button').forEach(b => (b.disabled = true));
+    return;
+  }
 
   const hint = parseHash();   // optional deep link: #ES/modes/5 or #ED/branches/Branch_0
   const firstPhase = (hint.phase && manifest.phases[hint.phase]?.available) ? hint.phase
@@ -65,9 +69,24 @@ function scaled(intArr, f) {
 // ---- scene ---------------------------------------------------------------
 function setupScene() {
   const view = document.getElementById('view');
-  try { renderer = new THREE.WebGLRenderer({ antialias: true }); }
-  catch (e) {
-    showFatal(new Error('WebGL is not available in this browser/session.'));
+  // Probe WebGL first so we can report WHY it failed (context null vs exception),
+  // and allow a software context (failIfMajorPerformanceCaveat: false) for machines
+  // whose GPU is blocklisted or where hardware acceleration is off.
+  const probe = probeWebGL();
+  if (!probe.ok) {
+    showFatal(new Error(
+      `WebGL could not start (${probe.reason}). Enable hardware acceleration or GPU access, ` +
+      `then reload. In Chrome: Settings > System > "Use graphics acceleration when available" ` +
+      `(and check chrome://gpu). In Firefox: about:config > webgl.disabled = false.`));
+    return false;
+  }
+  try {
+    renderer = new THREE.WebGLRenderer({
+      antialias: true, alpha: false, powerPreference: 'default',
+      failIfMajorPerformanceCaveat: false,
+    });
+  } catch (e) {
+    showFatal(new Error('WebGL renderer failed to initialise: ' + (e && e.message || e)));
     return false;
   }
   scene = new THREE.Scene();
@@ -87,6 +106,20 @@ function setupScene() {
   window.addEventListener('resize', onResize);
   return true;
 }
+function probeWebGL() {
+  const c = document.createElement('canvas');
+  let gl = null;
+  try {
+    gl = c.getContext('webgl2', { failIfMajorPerformanceCaveat: false })
+      || c.getContext('webgl', { failIfMajorPerformanceCaveat: false })
+      || c.getContext('experimental-webgl', { failIfMajorPerformanceCaveat: false });
+  } catch (e) {
+    return { ok: false, reason: 'getContext threw: ' + (e && e.message || e) };
+  }
+  if (!gl) return { ok: false, reason: 'no WebGL context (GPU blocked or acceleration off)' };
+  return { ok: true };
+}
+
 function onResize() {
   const view = document.getElementById('view');
   camera.aspect = view.clientWidth / view.clientHeight;
@@ -225,6 +258,7 @@ function populateItems() {
 // ---- data + meshes -------------------------------------------------------
 async function selectPhase(phase, hint = {}) {
   if (!phase || !manifest.phases[phase]?.available) return;
+  if (!pivot) return;   // scene never initialised (e.g. WebGL unavailable): stay on the error note
   document.getElementById('note').textContent = 'Loading…';
   if (!phaseCache[phase]) phaseCache[phase] = await fetchJSON(`${DATA}/${phase}.json`);
   const data = phaseCache[phase];
