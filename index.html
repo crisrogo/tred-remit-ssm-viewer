@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>TRED / REMIT cardiac SSM viewer</title>
-<link rel="stylesheet" href="./css/style.css">
+<link rel="stylesheet" href="./css/style.css?v=7">
 <!-- Surface any load/runtime error on the page (module-import failures, blocked file://
      fetches, WebGL problems) instead of failing silently on "Loading…". -->
 <script>
@@ -34,27 +34,55 @@
 <div id="app">
   <aside id="panel">
     <h1>Cardiac SSM viewer</h1>
-    <p class="sub">TRED / REMIT ortho-tree branches</p>
-
-    <div class="group">
-      <span class="lbl">Phase</span>
-      <div id="phase-toggle" class="seg"></div>
-    </div>
+    <p class="sub">TRED / REMIT combined ortho DDRTree</p>
 
     <div class="group">
       <span class="lbl">Show</span>
       <div id="view-toggle" class="seg"></div>
     </div>
 
-    <div class="group">
-      <label class="lbl" for="item" id="item-label">Branch</label>
-      <select id="item"></select>
+    <!-- Modes only: a mode belongs to one phase's PCA, so the phase must be chosen. The
+         tree is a single combined fit and its shapes are always drawn in the ES model. -->
+    <div class="group mode-view" id="phase-group">
+      <span class="lbl">Phase</span>
+      <div id="phase-toggle" class="seg"></div>
+      <p class="hint">Modes come from that phase&rsquo;s own PCA.</p>
     </div>
 
     <div class="group">
-      <label class="lbl" for="morph">Morph: mean &rarr; <span id="morph-val">1.00&times;</span></label>
+      <label class="lbl" for="item" id="item-label">Branch</label>
+      <select id="item"></select>
+      <p class="hint tree-view">Branches are phenotypes of the combined ED+ES tree; their
+        shapes are drawn in the end-systolic model.</p>
+    </div>
+
+    <!-- Tree view only: where along the branch, and how far towards it. -->
+    <div class="group tree-view" id="map-group">
+      <span class="lbl">Position on the tree</span>
+      <div id="minimap"></div>
+      <p class="hint" id="map-hint">Click a branch, or drag along it.</p>
+    </div>
+
+    <!-- Exactly one of the two below is live at a time. Both at once compounds: the branch
+         shape you were morphing towards would itself move as pseudotime changed. -->
+    <div class="group branch-only" id="vary-group">
+      <span class="lbl">Vary</span>
+      <div id="vary-toggle" class="seg"></div>
+    </div>
+
+    <div class="group" id="ptime-group">
+      <label class="lbl" for="ptime">Pseudotime: <span id="ptime-val">–</span></label>
+      <input id="ptime" type="range">
+      <div class="ticks"><span>proximal</span><span>mid</span><span>distal</span></div>
+      <p class="hint">Held at 100% of the way to the branch, so only the position along it
+        changes.</p>
+    </div>
+
+    <div class="group" id="morph-group">
+      <label class="lbl" for="morph" id="morph-label">Morph: <span id="morph-val">100%</span></label>
       <input id="morph" type="range">
-      <div class="ticks" id="morph-ticks"><span>mean</span><span>shape</span><span>exaggerated</span></div>
+      <div class="ticks" id="morph-ticks"></div>
+      <p class="hint" id="morph-hint"></p>
     </div>
 
     <div class="group">
@@ -70,10 +98,10 @@
 
     <button id="reset">Reset view</button>
     <p id="note" class="note">Loading&hellip;</p>
-    <p class="ver">build 5 &middot; branches + modes</p>
+    <p class="ver">build 7 &middot; DDRTree along pseudotime</p>
   </aside>
   <main id="view"></main>
 </div>
-<script type="module" src="./js/main.js?v=5"></script>
+<script type="module" src="./js/main.js?v=7"></script>
 </body>
 </html>

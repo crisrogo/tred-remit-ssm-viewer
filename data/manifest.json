@@ -2,7 +2,15 @@
   "phases": {
     "ED": {
       "available": true,
-      "branches": [],
+      "branches": [
+        "Branch_0",
+        "Branch_1",
+        "Branch_2",
+        "Branch_3",
+        "Branch_4",
+        "Branch_5",
+        "cohort_mean_233"
+      ],
       "modes": [
         1,
         2,
@@ -27,7 +35,8 @@
         21,
         22
       ],
-      "n_sd": 3.0
+      "n_sd": 3.0,
+      "branch_source": "linearised"
     },
     "ES": {
       "available": true,
@@ -37,6 +46,7 @@
         "Branch_2",
         "Branch_3",
         "Branch_4",
+        "Branch_5",
         "cohort_mean_233"
       ],
       "modes": [
@@ -59,7 +69,8 @@
         17,
         18
       ],
-      "n_sd": 3.0
+      "n_sd": 3.0,
+      "branch_source": "linearised"
     }
   },
   "colormap": [
