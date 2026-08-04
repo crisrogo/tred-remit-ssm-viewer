@@ -2,6 +2,10 @@
 """
 Export branch-mean PC score vectors for one phase (ED or ES) of the combined ortho DDRTree.
 
+SUPERSEDED by export_branch_pseudotime_scores.py, which samples each branch at several
+pseudotime knots instead of collapsing it to its mean. Kept only to rebuild the older
+one-shape-per-branch data; the viewer's branch controls need the knots.
+
 Per ortho-tree branch, take the mean of its members' raw PC scores from that phase's
 PCA.csv. Feed the result through shape_analysis/shoot_branch_mean_shapes.py (against that
 phase's SSM) to shoot the branch-mean meshes, then tools/build_web_meshes.py to add the

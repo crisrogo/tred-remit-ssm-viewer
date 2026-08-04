@@ -3,13 +3,17 @@
 Convert shot SSM meshes (VTK) into the compact JSON the web viewer loads.
 
 A phase (ED or ES) can carry two kinds of items:
-  - branches: the ortho-tree branch-mean shapes (unidirectional, mean -> branch),
+  - branches: ortho-tree branch shapes sampled along pseudotime (unidirectional,
+              mean -> branch, with several knots from proximal to distal),
   - modes:    a PCA shape mode swept to +/- n_sd (bidirectional, -SD .. mean .. +SD).
 
-Branch meshes come from a branch-mean shooting (Shooting_0 = mean/template,
-Shooting_1.. = Branch_0.., last = cohort_mean_233). Mode meshes come from a mode-sweep
-shooting (Shooting_0 = mean, Shooting_2k-1 / 2k = mode k at -n_sd / +n_sd SD). All shapes are
-shot from the same SSM template, so topology is shared and the viewer morphs per vertex.
+Branch meshes come from shooting the knot score vectors of
+tools/export_branch_pseudotime_scores.py; pass the `*_knots.json` it writes alongside so
+the Shooting_<index> files can be tied back to (branch, knot pseudotime). Without that
+file the older one-mesh-per-branch layout (Shooting_1.. = Branch_0..) is assumed and each
+branch gets a single knot. Mode meshes come from a mode-sweep shooting (Shooting_0 = mean,
+Shooting_2k-1 / 2k = mode k at -n_sd / +n_sd SD). All shapes are shot from the same SSM
+template, so topology is shared and the viewer morphs per vertex.
 
 Output:
   data/<PHASE>.json     one phase's geometry (tags -> faces, mean, branches{}, modes{})
@@ -17,8 +21,9 @@ Output:
 
 Run (system python3 with pyvista):
   python3 tools/build_web_meshes.py --phase ES \
-      --branch_dir /media/.../DDRTree_EDES_ortho/branch_meshes \
-      --mode_dir   /media/.../DDRTree_EDES_ortho/mode_scores_ES --out_dir data
+      --branch_dir   /media/.../DDRTree_EDES_ortho/branch_pt_meshes_ES \
+      --branch_knots /media/.../DDRTree_EDES_ortho/branch_pt_ES_scores_knots.json \
+      --mode_dir     /media/.../DDRTree_EDES_ortho/mode_scores_ES --out_dir data
   python3 tools/build_web_meshes.py --phase ED \
       --mode_dir   /media/.../DDRTree_EDES_ortho/mode_scores_ED --out_dir data
 """
@@ -33,10 +38,19 @@ import re
 import numpy as np
 import pyvista as pv
 
-# Branch shooting index -> item label (from export_branch_mean_es_scores.py).
+# Legacy branch shooting index -> item label (one mesh per branch, no pseudotime).
 _BRANCH_ITEM = {1: "Branch_0", 2: "Branch_1", 3: "Branch_2", 4: "Branch_3",
                 5: "Branch_4", 6: "cohort_mean_233"}
 _CMAP = ["#7A5E8A", "#F5E740"]  # displacement anchors: low -> high
+
+
+def _branch_layout(knots_json):
+    """-> {item: {'pt': [...]|None, 'index': [shooting index per knot]}}."""
+    if knots_json is None:
+        return {name: {"pt": None, "index": [i]} for i, name in sorted(_BRANCH_ITEM.items())}
+    with open(knots_json) as fh:
+        meta = json.load(fh)["branches"]
+    return {name: {"pt": m["pt"], "index": list(m["index"])} for name, m in meta.items()}
 
 
 def _tag(path):
@@ -66,8 +80,9 @@ def _read_dir(mesh_dir):
     return by_tag
 
 
-def build_phase(phase, branch_dir, mode_dir, out_dir, scale=20, n_sd=3.0):
+def build_phase(phase, branch_dir, mode_dir, out_dir, scale=20, n_sd=3.0, branch_knots=None):
     branch = _read_dir(branch_dir) if branch_dir else None
+    layout = _branch_layout(branch_knots) if branch is not None else {}
     mode = _read_dir(mode_dir) if mode_dir else None
     ref = mode if mode is not None else branch
     if ref is None:
@@ -97,9 +112,15 @@ def build_phase(phase, branch_dir, mode_dir, out_dir, scale=20, n_sd=3.0):
         npts = ref[t][0].n_points
         if branch is not None and t in branch:
             entry["branches"] = {}
-            for i, name in _BRANCH_ITEM.items():
-                if i in branch[t] and branch[t][i].n_points == npts:
-                    entry["branches"][name] = delta_int(t, branch[t][i].points)
+            for name, spec in layout.items():
+                got = [i for i in spec["index"]
+                       if i in branch[t] and branch[t][i].n_points == npts]
+                if len(got) != len(spec["index"]):
+                    continue                       # a knot is missing: drop the whole item
+                entry["branches"][name] = {
+                    "pt": spec["pt"],
+                    "d": [delta_int(t, branch[t][i].points) for i in spec["index"]],
+                }
         if mode is not None and t in mode:
             entry["modes"] = {}
             for idx, m in mode[t].items():
@@ -110,8 +131,8 @@ def build_phase(phase, branch_dir, mode_dir, out_dir, scale=20, n_sd=3.0):
                 entry["modes"].setdefault(str(k), {})[sign] = delta_int(t, m.points)
         tags_out[t] = entry
 
-    branch_list = [_BRANCH_ITEM[i] for i in sorted(_BRANCH_ITEM)
-                   if branch is not None and any(i in branch[t] for t in tags)]
+    branch_list = [name for name in layout
+                   if any(name in tags_out[t].get("branches", {}) for t in tags)]
     mode_set = set()
     if mode is not None:
         for t in tags:
@@ -120,8 +141,35 @@ def build_phase(phase, branch_dir, mode_dir, out_dir, scale=20, n_sd=3.0):
     print(f"  branches: {branch_list}")
     print(f"  modes: {len(mode_list)} ({mode_list[:5]}{'...' if len(mode_list) > 5 else ''})")
 
+    # Only one kind of mesh given: keep the other kind from the JSON already on disk rather
+    # than dropping it, as long as the template it was built against still matches.
+    keep_kind = "modes" if mode is None else ("branches" if branch is None else None)
+    out_path = os.path.join(out_dir, f"{phase}.json")
+    if keep_kind and os.path.exists(out_path):
+        with open(out_path) as fh:
+            prev = json.load(fh)
+        shared = [t for t in tags
+                  if t in prev.get("tags", {})
+                  and len(prev["tags"][t]["mean"]) == len(tags_out[t]["mean"])
+                  and prev.get("scale") == scale
+                  and keep_kind in prev["tags"][t]]
+        if len(shared) == len(tags):
+            for t in tags:
+                tags_out[t][keep_kind] = prev["tags"][t][keep_kind]
+            if keep_kind == "modes":
+                mode_list = prev.get("modes", [])
+            else:
+                branch_list = prev.get("branches", [])
+            print(f"  kept existing {keep_kind} from {out_path}")
+        else:
+            print(f"  WARNING: existing {keep_kind} in {out_path} do not match this "
+                  f"template ({len(shared)}/{len(tags)} tags) and were dropped")
+
     phase_json = {"phase": phase, "radius": round(radius, 3), "n_sd": n_sd,
-                  "scale": scale, "branches": branch_list, "modes": mode_list, "tags": tags_out}
+                  "scale": scale, "branches": branch_list, "modes": mode_list,
+                  "branch_source": "shot" if branch is not None else None,
+                  "branch_knots": max((len(layout[n]["index"]) for n in branch_list), default=0),
+                  "tags": tags_out}
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, f"{phase}.json"), "w") as fh:
         json.dump(phase_json, fh)
@@ -139,8 +187,15 @@ def build_phase(phase, branch_dir, mode_dir, out_dir, scale=20, n_sd=3.0):
     manifest.setdefault("phases", {})
     for p in ("ED", "ES"):
         manifest["phases"].setdefault(p, {"available": False, "branches": [], "modes": []})
-    manifest["phases"][phase] = {"available": True, "branches": branch_list,
-                                 "modes": mode_list, "n_sd": n_sd}
+    keep = manifest["phases"].get(phase, {})
+    manifest["phases"][phase] = {"available": True,
+                                 "branches": branch_list or keep.get("branches", []),
+                                 "modes": mode_list or keep.get("modes", []),
+                                 "n_sd": n_sd}
+    if branch is not None:
+        manifest["phases"][phase]["branch_source"] = "shot"
+    elif "branch_source" in keep:
+        manifest["phases"][phase]["branch_source"] = keep["branch_source"]
     manifest["colormap"] = _CMAP
     manifest["slider"] = {"min": 0, "max": 3, "step": 0.05, "default": 1.0}
     with open(man_path, "w") as fh:
@@ -152,12 +207,15 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--phase", required=True, choices=["ED", "ES"])
-    ap.add_argument("--branch_dir", default=None, help="dir of branch-mean Shooting_*tp_10*.vtk")
+    ap.add_argument("--branch_dir", default=None, help="dir of branch Shooting_*tp_10*.vtk")
+    ap.add_argument("--branch_knots", default=None,
+                    help="*_knots.json from export_branch_pseudotime_scores.py")
     ap.add_argument("--mode_dir", default=None, help="dir of mode-sweep Shooting_*tp_10*.vtk")
     ap.add_argument("--n_sd", type=float, default=3.0, help="SD the mode meshes were shot at")
     ap.add_argument("--out_dir", default="data")
     args = ap.parse_args(argv)
-    build_phase(args.phase, args.branch_dir, args.mode_dir, args.out_dir, n_sd=args.n_sd)
+    build_phase(args.phase, args.branch_dir, args.mode_dir, args.out_dir, n_sd=args.n_sd,
+                branch_knots=args.branch_knots)
     return 0
 
 
