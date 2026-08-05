@@ -12,13 +12,27 @@
 // itself slide as pseudotime changed, so the morph slider would not mean one fixed thing.
 //   'blend' — target pinned to the branch midpoint, morph runs 0-100% from the ES template.
 //   'along' — morph pinned at 100%, pseudotime runs proximal -> distal.
-// Modes keep the single -SD .. mean .. +SD sweep. Each vertex is coloured by how far it moves.
+// Modes keep the single -SD .. mean .. +SD sweep. Each vertex is coloured by how far it moves,
+// on a perceptually uniform ramp (viridis) stored as hex stops in the manifest.
+//
+// Every surface can be shown as a filled shape, as a wireframe, or both; the two tickbox
+// columns share one geometry per surface, so the wireframe morphs with the fill. The tree
+// view also carries a second copy of the minimap over the 3D scene, captioned with the
+// branch on screen.
 import * as THREE from './vendor/three.module.js';
 
 const DATA = './data';
 const EPI_OPACITY = 0.22;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const TREE_PHASE = 'ES';         // the tree's shapes are always shown end-systolic
+const RAMP_N = 256;              // lookup-table resolution for the displacement colourmap
+const COLUMNS = ['fill', 'wire'];  // the two tickbox columns per surface
+// The two 3D backgrounds. White is for figures and screenshots, and the wireframe has to
+// flip with it or it disappears into the background.
+const BACKGROUNDS = {
+  dark:  { bg: 0x14161b, wire: 0xdfe3ea, wireOpacity: 0.40 },
+  light: { bg: 0xffffff, wire: 0x2b3038, wireOpacity: 0.45 },
+};
 // Mesh tags as written by the SSM, spelled out for the surface list.
 const TAG_NAMES = {
   LV_endo: 'Left ventricular endocardium',
@@ -31,14 +45,15 @@ const TAG_NAMES = {
   tricuspid_valve: 'Tricuspid valve',
 };
 
-let manifest, tree, low, high;
+let manifest, tree, ramp;
 const phaseCache = {};
-const state = { view: null, phase: null, item: null, t: 0, pt: 0, vary: 'blend' };
+const state = { view: null, phase: null, item: null, t: 0, pt: 0, vary: 'blend', bg: 'dark' };
 let scene, camera, renderer, radius = 100;
 let pivot;
 const spin = { vx: 0, vy: 0 };
 let dragging = false;
-let tagObjects = {};   // tag -> { mesh, mean:Float32Array, entry, act }
+let tagObjects = {};   // tag -> { mesh, wire, mean:Float32Array, entry, act }
+let tagMasters = {};   // 'fill' | 'wire' -> the checkbox that toggles that whole column
 let maxDisp = 1;
 
 init().catch(showFatal);
@@ -49,12 +64,13 @@ async function init() {
     fetchJSON(`${DATA}/tree.json`).catch(() => null),
   ]);
   document.title = manifest.title || document.title;
-  [low, high] = manifest.colormap.map(hexToRgb);
+  ramp = buildRamp(manifest.colormap);
   document.getElementById('cbar').style.background =
-    `linear-gradient(90deg, ${manifest.colormap[0]}, ${manifest.colormap[1]})`;
+    `linear-gradient(90deg, ${manifest.colormap.join(', ')})`;
 
   buildViewToggle();
   buildPhaseToggle();
+  buildBgToggle();
   document.getElementById('item').addEventListener('change', e => selectItem(e.target.value));
   document.getElementById('reset').addEventListener('click', frameCamera);
   document.getElementById('morph').addEventListener('input', e => {
@@ -70,7 +86,7 @@ async function init() {
       .forEach(b => (b.disabled = true));
     return;
   }
-  if (tree) buildMinimap();
+  if (tree) buildMinimaps();
 
   const hint = parseHash();
   const phases = ['ES', 'ED'].filter(p => manifest.phases[p]?.available);
@@ -104,6 +120,24 @@ function scaled(intArr, f) {
 function hasItems(phase, view) {
   return ((manifest.phases[phase] || {})[view] || []).length > 0;
 }
+// The displacement colourmap as a 256-entry lookup table. The manifest stores it as a list
+// of hex stops (viridis, which is perceptually uniform, so equal steps in displacement look
+// like equal steps in colour); interpolating between them once here leaves the per-vertex
+// loop with a single array index. Any number of stops works, including the old two.
+function buildRamp(hexStops) {
+  const stops = hexStops.map(hexToRgb);
+  if (stops.length < 2) stops.push(stops[0]);
+  const lut = new Float32Array(RAMP_N * 3);
+  for (let k = 0; k < RAMP_N; k++) {
+    const p = k / (RAMP_N - 1) * (stops.length - 1);
+    const i = Math.min(stops.length - 2, Math.floor(p));
+    const w = p - i;
+    for (let c = 0; c < 3; c++) {
+      lut[k * 3 + c] = stops[i][c] + (stops[i + 1][c] - stops[i][c]) * w;
+    }
+  }
+  return lut;
+}
 
 // ---- scene ---------------------------------------------------------------
 function setupScene() {
@@ -129,7 +163,7 @@ function setupScene() {
     return false;
   }
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x14161b);
+  scene.background = new THREE.Color(BACKGROUNDS[state.bg].bg);
   camera = new THREE.PerspectiveCamera(35, view.clientWidth / view.clientHeight, 0.1, 5000);
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(view.clientWidth, view.clientHeight);
@@ -219,12 +253,21 @@ function frameCamera() {
 }
 
 // ---- panel ---------------------------------------------------------------
+// data-tip is the hover definition; CSS shows it under the whole segmented control, so it
+// can be a sentence without spilling out of the panel.
 function buildViewToggle() {
   const box = document.getElementById('view-toggle');
   box.innerHTML = '';
-  for (const [key, label] of [['branches', 'DDRTree'], ['modes', 'Modes']]) {
+  for (const [key, label, tip] of [
+    ['branches', 'DDRTree',
+     'Tree fitted to the whole cohort at once. Each branch is a group of hearts sharing a ' +
+     'shape phenotype, ordered along pseudotime from the root outwards.'],
+    ['modes', 'Modes',
+     'Principal components of the shape model: each mode is one independent pattern of ' +
+     'shape variation, measured in standard deviations either side of the mean.'],
+  ]) {
     const b = document.createElement('button');
-    b.textContent = label; b.dataset.view = key;
+    b.textContent = label; b.dataset.view = key; b.dataset.tip = tip;
     b.addEventListener('click', () => selectView(key));
     box.appendChild(b);
   }
@@ -233,13 +276,40 @@ function buildVaryToggle() {
   const box = document.getElementById('vary-toggle');
   box.innerHTML = '';
   for (const [key, label, tip] of [
-    ['blend', 'Towards branch', 'Morph the ES template 0-100% towards the branch midpoint'],
-    ['along', 'Along branch', 'Walk the branch proximal to distal at the full branch shape'],
+    ['blend', 'Towards branch', 'Morph the ES template 0-100% towards the branch midpoint.'],
+    ['along', 'Along branch', 'Walk the branch proximal to distal at the full branch shape.'],
   ]) {
     const b = document.createElement('button');
-    b.textContent = label; b.dataset.vary = key; b.title = tip;
+    b.textContent = label; b.dataset.vary = key; b.dataset.tip = tip;
     b.addEventListener('click', () => selectVary(key));
     box.appendChild(b);
+  }
+}
+function buildBgToggle() {
+  const box = document.getElementById('bg-toggle');
+  box.innerHTML = '';
+  for (const [key, label, tip] of [
+    ['dark', 'Dark', 'Dark background, easiest on the eye for exploring.'],
+    ['light', 'White', 'White background, for figures and screenshots.'],
+  ]) {
+    const b = document.createElement('button');
+    b.textContent = label; b.dataset.bg = key; b.dataset.tip = tip;
+    b.addEventListener('click', () => selectBackground(key));
+    box.appendChild(b);
+  }
+  selectBackground(state.bg);
+}
+// Changing the background also recolours the wireframe and (through CSS) the in-view
+// minimap, so nothing is left drawn in a colour that has just become the background.
+function selectBackground(bg) {
+  state.bg = bg;
+  const theme = BACKGROUNDS[bg];
+  setActive('#bg-toggle button', 'bg', bg);
+  document.getElementById('view').classList.toggle('light', bg === 'light');
+  if (scene) scene.background = new THREE.Color(theme.bg);
+  for (const tag in tagObjects) {
+    const w = tagObjects[tag].wire;
+    if (w) { w.material.color.setHex(theme.wire); w.material.opacity = theme.wireOpacity; }
   }
 }
 function selectVary(vary) {
@@ -292,6 +362,9 @@ function populateItems() {
   document.getElementById('item-label').textContent =
     state.view === 'modes' ? 'Mode' : 'Branch';
 }
+// One row per surface with two tickboxes: the filled shape ("fill") and its wireframe
+// ("wire"). A master row on top turns a whole column on or off at once, and shows the mixed
+// state when only some are on. The grid is laid out in CSS, so the cells are appended flat.
 function buildTagCheckboxes(tags) {
   const box = document.getElementById('tags');
   box.innerHTML = '';
@@ -300,14 +373,76 @@ function buildTagCheckboxes(tags) {
   const rank = Object.keys(TAG_NAMES);
   const ordered = [...tags].sort((a, b) =>
     (rank.indexOf(a) + 1 || 99) - (rank.indexOf(b) + 1 || 99) || a.localeCompare(b));
-  for (const tag of ordered) {
-    const lab = document.createElement('label');
+  const span = (cls, text) => {
+    const el = document.createElement('span');
+    if (cls) el.className = cls;
+    el.textContent = text;
+    return el;
+  };
+
+  box.appendChild(span('cap', 'fill'));
+  box.appendChild(span('cap', 'wire'));
+  box.appendChild(span('', ''));
+
+  tagMasters = {};
+  for (const col of COLUMNS) {
     const cb = document.createElement('input');
-    cb.type = 'checkbox'; cb.checked = true;
-    cb.addEventListener('change', () => { if (tagObjects[tag]) tagObjects[tag].mesh.visible = cb.checked; });
-    lab.appendChild(cb);
-    lab.appendChild(document.createTextNode(' ' + (TAG_NAMES[tag] || tag.replace(/_/g, ' '))));
+    cb.type = 'checkbox'; cb.className = 'master';
+    cb.title = col === 'fill' ? 'Show or hide every surface'
+                              : 'Show or hide every wireframe';
+    cb.addEventListener('change', () => setWholeColumn(col, cb.checked));
+    tagMasters[col] = cb;
+    box.appendChild(cb);
+  }
+  box.appendChild(span('all', 'all'));
+  const rule = document.createElement('div');
+  rule.className = 'rule';
+  box.appendChild(rule);
+
+  for (const tag of ordered) {
+    const id = 'tag-fill-' + tag;
+    for (const col of COLUMNS) {
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = col === 'fill';        // surfaces start on, wireframes start off
+      cb.dataset.tag = tag; cb.dataset.col = col;
+      if (col === 'fill') cb.id = id;
+      cb.title = `${col === 'fill' ? 'Surface' : 'Wireframe'}: ` +
+                 (TAG_NAMES[tag] || tag.replace(/_/g, ' '));
+      cb.addEventListener('change', () => {
+        setTagPart(tag, col, cb.checked); refreshMasters();
+      });
+      box.appendChild(cb);
+    }
+    const lab = document.createElement('label');
+    lab.htmlFor = id;
+    lab.textContent = TAG_NAMES[tag] || tag.replace(/_/g, ' ');
     box.appendChild(lab);
+  }
+  refreshMasters();
+}
+function setTagPart(tag, col, on) {
+  const o = tagObjects[tag];
+  if (!o) return;
+  if (col === 'fill') o.mesh.visible = on; else o.wire.visible = on;
+}
+function setWholeColumn(col, on) {
+  for (const cb of document.querySelectorAll(`#tags input[data-col="${col}"]`)) {
+    cb.checked = on;
+    setTagPart(cb.dataset.tag, col, on);
+  }
+  refreshMasters();
+}
+// A master is ticked when its whole column is on, and shows the indeterminate dash when
+// only some of it is, so it never claims a state the scene is not in.
+function refreshMasters() {
+  for (const col of COLUMNS) {
+    const boxes = [...document.querySelectorAll(`#tags input[data-col="${col}"]`)];
+    const on = boxes.filter(b => b.checked).length;
+    const m = tagMasters[col];
+    if (!m) continue;
+    m.checked = boxes.length > 0 && on === boxes.length;
+    m.indeterminate = on > 0 && on < boxes.length;
   }
 }
 // The morph slider means different things in the two views, so it is relabelled wholesale.
@@ -357,7 +492,10 @@ function updateBranchControls(keepPt = false) {
   const walkable = state.view === 'branches' && knots && knots.length > 1;
   const along = walkable && state.vary === 'along';
   for (const el of document.querySelectorAll('.branch-only')) el.hidden = !walkable;
-  document.getElementById('map-group').hidden = !(state.view === 'branches' && tree);
+  // Both copies of the minimap live and die together: the panel one and the in-view overlay.
+  const showMap = state.view === 'branches' && !!tree;
+  document.getElementById('map-group').hidden = !showMap;
+  document.getElementById('viewmap').hidden = !showMap;
   document.getElementById('ptime-group').hidden = !along;
   document.getElementById('morph-group').hidden = along;
   setActive('#vary-toggle button', 'vary', state.vary);
@@ -401,7 +539,14 @@ async function selectPhase(phase, hint = {}) {
   setActive('#view-toggle button', 'view', state.view);
   refreshPhaseToggle();
 
-  for (const t in tagObjects) pivot.remove(tagObjects[t].mesh);
+  // Switching phase rebuilds every mesh, so drop the old GPU buffers rather than leaking
+  // them. The fill and the wireframe share one geometry, hence one dispose.
+  for (const t in tagObjects) {
+    const o = tagObjects[t];
+    pivot.remove(o.mesh); pivot.remove(o.wire);
+    o.mesh.geometry.dispose();
+    o.mesh.material.dispose(); o.wire.material.dispose();
+  }
   tagObjects = {};
   const tags = Object.keys(data.tags);
   for (const tag of tags) buildTagMesh(tag, data.tags[tag]);
@@ -452,11 +597,27 @@ function buildTagMesh(tag, entry) {
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true, roughness: 0.85, metalness: 0.0, side: THREE.DoubleSide,
     transparent: isEpi, opacity: isEpi ? EPI_OPACITY : 1.0, depthWrite: !isEpi,
+    // Push the filled triangles back a hair so a wireframe drawn over them is not
+    // half-swallowed by z-fighting.
+    polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.renderOrder = isEpi ? 1 : 0;
   pivot.add(mesh);
-  tagObjects[tag] = { mesh, mean, entry, act: null };
+
+  // The wireframe shares the same geometry, so it follows every morph for free. It is a
+  // flat neutral colour rather than the displacement colours: over a coloured fill, lines
+  // are only readable if they contrast with it. Off until the tickbox is set.
+  const theme = BACKGROUNDS[state.bg];
+  const wire = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    color: theme.wire, wireframe: true,
+    transparent: true, opacity: theme.wireOpacity, depthWrite: false,
+  }));
+  wire.renderOrder = 2;
+  wire.visible = false;
+  pivot.add(wire);
+
+  tagObjects[tag] = { mesh, wire, mean, entry, act: null };
 }
 function selectItem(item, hint = {}) {
   state.item = item;
@@ -537,9 +698,8 @@ function updateMorph() {
       const dx = ax * f, dy = ay * f, dz = az * f;
       pos[i] = mean[i] + dx; pos[i + 1] = mean[i + 1] + dy; pos[i + 2] = mean[i + 2] + dz;
       const g = Math.min(1, Math.hypot(dx, dy, dz) / maxDisp);
-      col[i] = low[0] + (high[0] - low[0]) * g;
-      col[i + 1] = low[1] + (high[1] - low[1]) * g;
-      col[i + 2] = low[2] + (high[2] - low[2]) * g;
+      const k = ((g * (RAMP_N - 1)) | 0) * 3;
+      col[i] = ramp[k]; col[i + 1] = ramp[k + 1]; col[i + 2] = ramp[k + 2];
     }
     o.mesh.geometry.attributes.position.needsUpdate = true;
     o.mesh.geometry.attributes.color.needsUpdate = true;
@@ -550,9 +710,13 @@ function updateMorph() {
 // ---- tree minimap --------------------------------------------------------
 // The DDRTree skeleton in its 2D embedding: the grey graph underneath, each branch drawn
 // over it in its own colour, and a marker at the pseudotime the viewer is showing.
-const map = { svg: null, paths: {}, dots: {}, head: null, box: null };
-function buildMinimap() {
-  const host = document.getElementById('minimap');
+// The same drawing goes in two places — the control panel and an overlay on the 3D view —
+// so the embedding is measured once and each host gets its own SVG, kept in `maps`. Their
+// styling differs (the overlay pushes the inactive branches much further back), but that is
+// entirely in CSS.
+const maps = [];
+let mapX = null, mapY = null;
+function buildMinimaps() {
   const N = tree.nodes;
   const xs = N.map(n => n[0]).concat(tree.samples.map(s => s[0]));
   const ys = N.map(n => n[1]).concat(tree.samples.map(s => s[1]));
@@ -560,11 +724,19 @@ function buildMinimap() {
                               Math.max(...ys) - Math.min(...ys));
   const box = { x0: Math.min(...xs) - pad, x1: Math.max(...xs) + pad,
                 y0: Math.min(...ys) - pad, y1: Math.max(...ys) + pad };
-  map.box = box;
   const W = 240, H = Math.round(W * (box.y1 - box.y0) / (box.x1 - box.x0));
-  const X = x => (x - box.x0) / (box.x1 - box.x0) * W;
-  const Y = y => (box.y1 - y) / (box.y1 - box.y0) * H;   // SVG y grows downwards
-  map.X = X; map.Y = Y;
+  mapX = x => (x - box.x0) / (box.x1 - box.x0) * W;
+  mapY = y => (box.y1 - y) / (box.y1 - box.y0) * H;   // SVG y grows downwards
+
+  for (const id of ['minimap', 'viewmap-plot']) {
+    const host = document.getElementById(id);
+    if (host) maps.push(buildMinimap(host, W, H));
+  }
+}
+function buildMinimap(host, W, H) {
+  const N = tree.nodes;
+  const X = mapX, Y = mapY;
+  const m = { svg: null, paths: {}, dots: {}, head: null };
 
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -586,22 +758,24 @@ function buildMinimap() {
     const el = add('circle', { cx: X(s[0]), cy: Y(s[1]), r: 1.6,
                                fill: br ? br.color : '#7f8797' }, 'smp');
     el.dataset.branch = `Branch_${s[2]}`;
-    (map.dots[`Branch_${s[2]}`] ||= []).push(el);
+    (m.dots[`Branch_${s[2]}`] ||= []).push(el);
   }
   for (const name in tree.branches) {
     const br = tree.branches[name];
     const pts = br.path.map(i => `${X(N[i][0])},${Y(N[i][1])}`).join(' ');
     const el = add('polyline', { points: pts, stroke: br.color }, 'brx');
     el.dataset.branch = name;
-    map.paths[name] = el;
+    m.paths[name] = el;
   }
   const r0 = tree.nodes[tree.root];
   add('circle', { cx: X(r0[0]), cy: Y(r0[1]), r: 3.5 }, 'root');
-  map.head = add('circle', { cx: -99, cy: -99, r: 5, fill: '#fff' }, 'head');
+  m.head = add('circle', { cx: -99, cy: -99, r: 5, fill: '#fff' }, 'head');
 
+  host.innerHTML = '';
   host.appendChild(svg);
-  map.svg = svg;
+  m.svg = svg;
   installMapControls(svg);
+  return m;
 }
 // Click or drag anywhere on the map: jump to the nearest point of any branch, which sets
 // both the branch and how far along it we are.
@@ -615,7 +789,7 @@ function installMapControls(svg) {
     for (const name in tree.branches) {
       for (const i of tree.branches[name].path) {
         const n = tree.nodes[i];
-        const d = Math.hypot(map.X(n[0]) - px, map.Y(n[1]) - py);
+        const d = Math.hypot(mapX(n[0]) - px, mapY(n[1]) - py);
         if (!best || d < best.d) best = { d, name, pt: n[2] };
       }
     }
@@ -641,18 +815,24 @@ function installMapControls(svg) {
   svg.addEventListener('pointercancel', up);
 }
 function drawMarker() {
-  if (!map.svg) return;
   const active = state.view === 'branches' ? state.item : null;
-  for (const name in map.paths) map.paths[name].classList.toggle('on', name === active);
-  for (const name in map.dots) {
-    for (const el of map.dots[name]) el.classList.toggle('on', name === active);
+  const br = (active && tree) ? tree.branches[active] : null;
+  const here = br ? pointAt(br, state.pt) : null;
+  for (const m of maps) {
+    for (const name in m.paths) m.paths[name].classList.toggle('on', name === active);
+    for (const name in m.dots) {
+      for (const el of m.dots[name]) el.classList.toggle('on', name === active);
+    }
+    if (!here) { m.head.setAttribute('cx', -99); m.head.setAttribute('cy', -99); continue; }
+    m.head.setAttribute('cx', mapX(here[0]));
+    m.head.setAttribute('cy', mapY(here[1]));
+    m.head.setAttribute('fill', br.color);
   }
-  const br = active && tree.branches[active];
-  if (!br) { map.head.setAttribute('cx', -99); map.head.setAttribute('cy', -99); return; }
-  const [x, y] = pointAt(br, state.pt);
-  map.head.setAttribute('cx', map.X(x));
-  map.head.setAttribute('cy', map.Y(y));
-  map.head.setAttribute('fill', br.color);
+  // Caption of the in-view minimap: which branch the shape on screen belongs to.
+  const nameEl = document.getElementById('viewmap-name');
+  const swatch = document.getElementById('viewmap-swatch');
+  if (nameEl) nameEl.textContent = active ? prettyItem(active) : '–';
+  if (swatch) swatch.style.background = br ? br.color : '#7f8797';
 }
 // Where a pseudotime lands on a branch: the path nodes are ordered by pseudotime, so walk
 // to the bracketing pair and interpolate between their coordinates.

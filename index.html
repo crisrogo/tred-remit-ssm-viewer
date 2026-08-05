@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>TRED / REMIT cardiac SSM viewer</title>
-<link rel="stylesheet" href="./css/style.css?v=7">
+<link rel="stylesheet" href="./css/style.css?v=8">
 <!-- Surface any load/runtime error on the page (module-import failures, blocked file://
      fetches, WebGL problems) instead of failing silently on "Loading…". -->
 <script>
@@ -59,7 +59,7 @@
     <!-- Tree view only: where along the branch, and how far towards it. -->
     <div class="group tree-view" id="map-group">
       <span class="lbl">Position on the tree</span>
-      <div id="minimap"></div>
+      <div id="minimap" class="treemap"></div>
       <p class="hint" id="map-hint">Click a branch, or drag along it.</p>
     </div>
 
@@ -85,6 +85,8 @@
       <p class="hint" id="morph-hint"></p>
     </div>
 
+    <!-- Two columns of tickboxes per surface: the filled shape and its wireframe. The top
+         row toggles a whole column at once. -->
     <div class="group">
       <span class="lbl">Surfaces</span>
       <div id="tags"></div>
@@ -96,12 +98,35 @@
       <div class="ticks"><span>0</span><span id="cbar-max">&ndash;</span></div>
     </div>
 
+    <div class="group">
+      <span class="lbl">Background</span>
+      <div id="bg-toggle" class="seg"></div>
+    </div>
+
     <button id="reset">Reset view</button>
     <p id="note" class="note">Loading&hellip;</p>
-    <p class="ver">build 7 &middot; DDRTree along pseudotime</p>
+    <p class="ver">build 8 &middot; DDRTree along pseudotime</p>
+
+    <!-- PLACEHOLDER: replace the link and the citation below once the paper is out.
+         Nothing else reads these; edit the text in place. -->
+    <footer id="cite">
+      <span class="lbl">Paper</span>
+      <p class="cite-line">
+        <a id="paper-link" href="#" rel="noopener">Paper link to be added</a>
+      </p>
+      <p class="cite-text" id="cite-text">Authors (year). Title. Journal, volume(issue),
+        pages. doi:10.xxxx/xxxxx</p>
+    </footer>
   </aside>
-  <main id="view"></main>
+  <main id="view">
+    <!-- Tree view only: the same minimap over the 3D scene, captioned with the branch on
+         screen; the other branches stay faint so the active one reads at a glance. -->
+    <div id="viewmap" class="tree-view" hidden>
+      <div id="viewmap-title"><span id="viewmap-swatch"></span><span id="viewmap-name">&ndash;</span></div>
+      <div id="viewmap-plot" class="treemap"></div>
+    </div>
+  </main>
 </div>
-<script type="module" src="./js/main.js?v=7"></script>
+<script type="module" src="./js/main.js?v=8"></script>
 </body>
 </html>

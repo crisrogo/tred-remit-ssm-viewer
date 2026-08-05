@@ -3,7 +3,8 @@
 An interactive, static web viewer for the cardiac statistical shape model. Choose what to
 show first — the **DDRTree** (ortho-tree branches) or PCA **shape modes** — then drag a
 slider to deform the mean biventricular mesh. Each vertex is coloured by how far it moves
-(purple = little, yellow = most). Rotate freely, zoom, and hide individual surfaces.
+(dark purple = little, yellow = most). Rotate freely, zoom, show or hide each surface and
+its wireframe, and switch the background between dark and white.
 
 The DDRTree is fitted on ED and ES **together** (feature matrix `[PC_ED | ES-perp]`), so the
 two views differ in whether a phase has to be chosen at all:
@@ -38,6 +39,46 @@ midpoint shape).
 
 It is a single static page (Three.js, no build step) and runs on GitHub Pages.
 
+## What the panel controls
+
+Hovering DDRTree or Modes gives a short definition of each, and the same applies to the
+Vary and Background buttons.
+
+Every surface carries two tickboxes, one for the filled shape and one for its wireframe.
+The row above them, marked "all", turns a whole column on or off at once and shows a dash
+while only some of that column is on. A wireframe shares the geometry of its surface, so it
+follows the morph without any extra work, and its colour follows the background.
+
+The background switches between dark, which is easier to explore in, and white, for figures
+and screenshots.
+
+In the tree view a second copy of the minimap sits over the 3D scene, top right, captioned
+with the branch on screen. There the other branches are left faint, so the active one reads
+at a glance; it takes clicks and drags exactly as the copy in the panel does.
+
+The link to the paper and its citation at the foot of the panel are placeholders. They are
+plain text in `index.html`, marked with a comment, and nothing else reads them.
+
+## The displacement colour scale
+
+Colours run along viridis, stored as 13 hex stops in `data/manifest.json` and expanded into
+a 256-entry lookup table when the page loads. Viridis is perceptually uniform, so equal
+steps in displacement look like equal steps in colour, which the two-colour ramp it replaced
+did not manage: over 64 equal steps the size of a step varied by a factor of 3.55 there
+against 2.06 here (CIEDE2000, a proxy for the CAM02-UCS metric viridis was designed in). It
+also holds the two ends further apart, 100.3 against 66.7 CIEDE2000 from zero to maximum
+displacement, with lightness running L* 14.9 to 90.9 rather than 44.2 to 90.3.
+
+To reproduce those numbers, try a different colourmap, or change the stop count:
+
+```bash
+python3 tools/make_colourmap.py                              # report only
+python3 tools/make_colourmap.py --write data/manifest.json   # report, then update the stops
+```
+
+`tools/build_web_meshes.py` keeps its own copy of the stops in `_CMAP`, which it writes back
+into the manifest on every rebuild, so change both together.
+
 ## View locally
 
 ```bash
@@ -69,7 +110,7 @@ data/manifest.json    phases / items / tags / colourmap / slider config
 data/tree.json        DDRTree skeleton for the minimap (nodes, edges, branches, pseudotime)
 data/ED.json          end-diastolic geometry (mean, branch knots, mode sweeps)
 data/ES.json          end-systolic geometry
-tools/                data-preparation scripts
+tools/                data-preparation scripts (and make_colourmap.py)
 ```
 
 ## Rebuilding the data when the tree changes
