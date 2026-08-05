@@ -41,7 +41,11 @@ import pyvista as pv
 # Legacy branch shooting index -> item label (one mesh per branch, no pseudotime).
 _BRANCH_ITEM = {1: "Branch_0", 2: "Branch_1", 3: "Branch_2", 4: "Branch_3",
                 5: "Branch_4", 6: "cohort_mean_233"}
-_CMAP = ["#7A5E8A", "#F5E740"]  # displacement anchors: low -> high
+# Displacement ramp, low -> high: viridis sampled at 13 stops. Perceptually uniform, so
+# equal steps in displacement look like equal steps in colour. Regenerate (and see the
+# uniformity check) with tools/make_colourmap.py.
+_CMAP = ["#440154", "#481F70", "#443983", "#3B528B", "#31688E", "#287C8E", "#21918C",
+         "#20A486", "#35B779", "#5EC962", "#90D743", "#C8E020", "#FDE725"]
 
 
 def _branch_layout(knots_json):
