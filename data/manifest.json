@@ -2,15 +2,7 @@
   "phases": {
     "ED": {
       "available": true,
-      "branches": [
-        "Branch_0",
-        "Branch_1",
-        "Branch_2",
-        "Branch_3",
-        "Branch_4",
-        "Branch_5",
-        "cohort_mean_233"
-      ],
+      "branches": [],
       "modes": [
         1,
         2,
@@ -35,8 +27,7 @@
         21,
         22
       ],
-      "n_sd": 3.0,
-      "branch_source": "linearised"
+      "n_sd": 3.0
     },
     "ES": {
       "available": true,
@@ -70,7 +61,7 @@
         18
       ],
       "n_sd": 3.0,
-      "branch_source": "linearised"
+      "branch_source": "shot"
     }
   },
   "colormap": [
