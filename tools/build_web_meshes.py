@@ -38,9 +38,15 @@ import re
 import numpy as np
 import pyvista as pv
 
-# Legacy branch shooting index -> item label (one mesh per branch, no pseudotime).
-_BRANCH_ITEM = {1: "Branch_0", 2: "Branch_1", 3: "Branch_2", 4: "Branch_3",
-                5: "Branch_4", 6: "cohort_mean_233"}
+# Legacy one-mesh-per-branch layout, written by shape_analysis/shoot_branch_mean_shapes.py
+# from the row order of export_branch_mean_es_scores.py:
+#     Shooting_0        the SSM template
+#     Shooting_1..n-1   Branch_0 .. Branch_(n-2)
+#     Shooting_n        the cohort mean
+# Derived from the meshes present rather than fixed, because the branch count changes with
+# the model. It was pinned at five branches and silently dropped two when the tree was
+# refit to seven.
+_COHORT_MEAN_LABEL = "cohort_mean"
 # Displacement ramp, low -> high: viridis sampled at 13 stops. Perceptually uniform, so
 # equal steps in displacement look like equal steps in colour. Regenerate (and see the
 # uniformity check) with tools/make_colourmap.py.
@@ -48,10 +54,19 @@ _CMAP = ["#440154", "#481F70", "#443983", "#3B528B", "#31688E", "#287C8E", "#219
          "#20A486", "#35B779", "#5EC962", "#90D743", "#C8E020", "#FDE725"]
 
 
-def _branch_layout(knots_json):
+def _branch_layout(knots_json, n_shootings=None):
     """-> {item: {'pt': [...]|None, 'index': [shooting index per knot]}}."""
     if knots_json is None:
-        return {name: {"pt": None, "index": [i]} for i, name in sorted(_BRANCH_ITEM.items())}
+        if not n_shootings or n_shootings < 3:
+            raise ValueError(
+                f"need at least a template, one branch and a cohort mean to infer the "
+                f"legacy branch layout; found {n_shootings} shooting index(es).")
+        # index 0 is the template and the highest index is the cohort mean; everything
+        # between them is a branch, in order.
+        layout = {f"Branch_{i - 1}": {"pt": None, "index": [i]}
+                  for i in range(1, n_shootings - 1)}
+        layout[_COHORT_MEAN_LABEL] = {"pt": None, "index": [n_shootings - 1]}
+        return layout
     with open(knots_json) as fh:
         meta = json.load(fh)["branches"]
     return {name: {"pt": m["pt"], "index": list(m["index"])} for name, m in meta.items()}
@@ -86,7 +101,8 @@ def _read_dir(mesh_dir):
 
 def build_phase(phase, branch_dir, mode_dir, out_dir, scale=20, n_sd=3.0, branch_knots=None):
     branch = _read_dir(branch_dir) if branch_dir else None
-    layout = _branch_layout(branch_knots) if branch is not None else {}
+    n_shootings = 1 + max(max(d) for d in branch.values()) if branch is not None else None
+    layout = _branch_layout(branch_knots, n_shootings) if branch is not None else {}
     mode = _read_dir(mode_dir) if mode_dir else None
     ref = mode if mode is not None else branch
     if ref is None:
