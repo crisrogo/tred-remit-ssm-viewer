@@ -201,6 +201,14 @@ The third step needs geodesic shooting, and the refitted atlas momenta, control 
 template exist only on the GPU cluster, not on `/media/croderog/Bob`. Until the modes and
 branch knots are shot on the rebuilt basis and converted, `data/` stays where it is.
 
+The staged minimap was checked against the one it will replace so the eventual swap is a
+straight rename: identical top-level keys, identical branch-record fields, node and sample
+records of the same length, every branch path and edge indexing inside the 107 nodes, and
+every branch id that a sample cites present in `branches`. `pt_min` is now **0.0** where the
+old file began at 0.0595, which is the root fix showing through. The six branches use exactly
+the six `_BRANCH_PALETTE` entries, so the golden-ratio fallback for a seventh never fires and
+the palette question the handoff raised does not arise.
+
 To finish, shoot both mode sweeps and the branch knots against the rebuilt atlases, then:
 
 ```bash
