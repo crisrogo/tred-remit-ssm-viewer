@@ -8,10 +8,14 @@ branch is instead sampled at K pseudotime knots.
 
 At a knot the score vector is read off a straight-line fit of the branch members' scores
 against pseudotime, not from the members near that knot. Within a branch the scores are
-linear in pseudotime to a very good approximation (on the current tree a quadratic term
-recovers <= 3.7% of the residual variance in either phase), and a fit uses all the members
-rather than the handful sitting near a knot, so it is both the better estimate and far
-less noisy at the branch ends where members thin out.
+close to linear in pseudotime: on the rebuilt tree a quadratic term recovers at most 6.8%
+of the linear residual variance in ED and 7.9% in ES, worst branch of six. A fit also uses
+all the members rather than the handful sitting near a knot, so it is both the better
+estimate and far less noisy at the branch ends where members thin out.
+
+The bound depends on the smallest branch. The pre-rebuild seven-branch tree had a branch of
+ten members where the quadratic recovered 13.2% (ED) and 19.9% (ES); the rebuilt tree's
+smallest branch holds 27, and no branch exceeds 7.9%.
 
 Knots are spaced evenly between two percentiles of the members' pseudotime (default the
 5th and 95th), so they stay inside the observed range without being dragged by the tails.
@@ -24,7 +28,7 @@ shows first when a branch is picked.
 Row order in the output CSV (the Shooting_<index> order downstream):
   0                     template          all-zero scores -> the SSM template / mean shape
   1 .. B*K              Branch_b__k<j>    branch b at knot j, b outer / j inner
-  B*K + 1               cohort_mean_233   mean scores over all tree observations
+  B*K + 1               cohort_mean_<n>   mean scores over all <n> tree observations
 
 Run (project venv):
   venv_TRED_REMIT_analysis/bin/python3 tools/export_branch_pseudotime_scores.py --phase ES
@@ -75,7 +79,7 @@ def branch_knot_scores(tree_dir, pca_csv, n_knots, span_pcts):
         print(f"    Branch_{b}: n={len(m):3d}  pt {t.min():.3f}..{t.max():.3f}  "
               f"knots {np.round(knots, 3).tolist()}  nearest-member support "
               f"{support.tolist()}  proximal->distal drift {drift:.1f}")
-    return pc_cols, out, scores.mean().values
+    return pc_cols, out, scores.mean().values, len(common)
 
 
 def main(argv=None) -> int:
@@ -100,8 +104,8 @@ def main(argv=None) -> int:
     span = [float(x) for x in args.span.split(",")]
 
     print(f"[{args.phase}] {args.n_knots} knots per branch, spanning percentiles {span}")
-    pc_cols, per_branch, cohort = branch_knot_scores(args.tree_dir, pca_csv,
-                                                     args.n_knots, span)
+    pc_cols, per_branch, cohort, n_obs = branch_knot_scores(args.tree_dir, pca_csv,
+                                                            args.n_knots, span)
 
     ids, rows, meta = ["template"], [np.zeros(len(pc_cols))], {}
     for b in sorted(per_branch):
@@ -111,8 +115,11 @@ def main(argv=None) -> int:
         for j, (k, row) in enumerate(zip(knots, fitted)):
             ids.append(f"Branch_{b}__k{j}")
             rows.append(row)
-    meta["cohort_mean_233"] = {"pt": None, "index": [len(ids)]}
-    ids.append("cohort_mean_233")
+    # The label carries the observation count, so a JSON built against one tree cannot
+    # be mistaken for another: 233 was the pre-phantom-removal cohort, 193 is the rebuilt.
+    cohort_label = f"cohort_mean_{n_obs}"
+    meta[cohort_label] = {"pt": None, "index": [len(ids)]}
+    ids.append(cohort_label)
     rows.append(cohort)
 
     out = pd.DataFrame(rows, columns=pc_cols)

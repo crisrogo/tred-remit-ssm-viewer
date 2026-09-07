@@ -138,9 +138,11 @@ still works (`--phase ED`) should the ED branch shapes ever be wanted.
 Each branch is sampled at `--n_knots` points (default 3: proximal, mid, distal) spaced
 evenly between the 5th and 95th percentile of its members' pseudotime. The score at a knot
 comes from a straight-line fit of the members' scores against pseudotime; within a branch
-the relationship is linear to a good approximation (a quadratic term recovers under 4% of
-the residual variance in either phase), so the fit is both more accurate and much less noisy
-than averaging the few members sitting near a knot. Percentiles are used only for the
+the relationship is close to linear (on the rebuilt tree a quadratic term recovers at most
+6.8% of the linear residual variance in ED and 7.9% in ES, worst branch of six), so the fit
+is both more accurate and much less noisy than averaging the few members sitting near a
+knot. The bound is set by the smallest branch, so it tightened when the tree went from
+seven branches to six: the old tree had a ten-member branch reaching 19.9%. Percentiles are used only for the
 endpoints, not for the knots themselves: pseudotime is a node property and a branch's
 terminal node carries many samples at once, so percentile knots collapse onto each other.
 
@@ -173,6 +175,40 @@ Mode meshes are shot the same way from `DDRTree/export_mode_scores.py --phase ES
 they only need rebuilding when the SSM itself changes, not when the tree is refitted.
 
 Finally commit `data/ED.json`, `data/ES.json`, `data/tree.json` and `data/manifest.json`.
+
+## State of the data: `data/` is one model behind
+
+`data/ED.json`, `data/ES.json`, `data/tree.json` and `data/manifest.json` were built on
+2026-08-24, against the seven-branch tree of 233 observations and a shape model with 31 ED
+and 22 ES modes. Both atlases have since been refitted with the phantom scan
+`TRED_1-012-004_` removed (ED 2026-08-28, ES 2026-09-01), which leaves **30 ED and 23 ES
+modes and a six-branch tree of 193 observations**. Nothing in `data/` reflects that.
+
+Two of the three rebuild steps are done and are on disk:
+
+- `data/tree.rebuilt_pending.json` is the minimap rebuilt from
+  `DDRTree_EDES_ortho_rebuilt/All_Visits`. It is *not* `data/tree.json`, because a
+  six-branch minimap over seven-branch mesh data would show a branch picker and a map that
+  disagree, which is worse than being uniformly out of date.
+- `DDRTree_EDES_ortho_rebuilt/branch_pt_ES_scores.csv` and its `_knots.json` hold the knot
+  score vectors, ready to shoot: six branches, three knots each, plus the template and
+  `cohort_mean_193`.
+
+The third step needs geodesic shooting, and the refitted atlas momenta, control points and
+template exist only on the GPU cluster, not on `/media/croderog/Bob`. Until the modes and
+branch knots are shot on the rebuilt basis and converted, `data/` stays where it is.
+
+To finish, shoot both mode sweeps and the branch knots against the rebuilt atlases, then:
+
+```bash
+venv/bin/python3 tools/build_web_meshes.py --phase ES \
+    --branch_dir <shot branch knots> \
+    --branch_knots <...>/DDRTree_EDES_ortho_rebuilt/branch_pt_ES_scores_knots.json \
+    --mode_dir <shot ES mode sweep> --out_dir data
+venv/bin/python3 tools/build_web_meshes.py --phase ED --mode_dir <shot ED mode sweep> \
+    --out_dir data
+mv data/tree.rebuilt_pending.json data/tree.json
+```
 
 ## Branch shapes currently in the viewer
 

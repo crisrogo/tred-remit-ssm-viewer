@@ -71,7 +71,7 @@ def main(argv=None) -> int:
     denom = n_sd * sd[idx]
 
     items = {f"Branch_{b}": (per_branch[b][0], per_branch[b][1][:, idx]) for b in per_branch}
-    items["cohort_mean_233"] = (None, cohort[idx][None, :])
+    items[f"cohort_mean_{n_obs}"] = (None, cohort[idx][None, :])
 
     covered = (np.abs(cohort[idx]) ** 2).sum() / (np.abs(cohort) ** 2).sum()
     print(f"  truncation: stored modes carry {covered:.1%} of the cohort-mean score energy")

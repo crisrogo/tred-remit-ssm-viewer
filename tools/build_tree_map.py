@@ -2,7 +2,7 @@
 """
 Build data/tree.json: the DDRTree skeleton the viewer draws as a minimap.
 
-The combined ortho tree (feature matrix [PC_ED | ES-perp], 233 observations) is a graph of
+The combined ortho tree (feature matrix [PC_ED | ES-perp]) is a graph of
 principal-curve nodes. This script reads the tree as the DDRTree run left it and packs the
 parts the viewer needs: node coordinates, edges, per-node pseudotime and branch id, the
 ordered proximal -> distal node path of each branch, and the sample scatter.
@@ -33,6 +33,9 @@ _BASE = "/media/croderog/Bob/shape_analysis/TRED_REMIT"
 # DDRTree/six_panel_figure.py:_BRANCH_PALETTE — keep the viewer and the paper figures
 # showing each branch in the same colour.
 _PALETTE = ["#3A7B8E", "#5A8A5A", "#7A5E8A", "#C08030", "#A8455C", "#3A4E8A"]
+# A correct root reproduces every sampled node's pseudotime to machine precision, so this
+# tolerance only has to sit clear of floating-point noise.
+_ROOT_TOL = 1e-9
 
 
 def _neighbours(edges, n_nodes):
@@ -41,6 +44,32 @@ def _neighbours(edges, n_nodes):
         adj[u].append(v)
         adj[v].append(u)
     return adj
+
+
+def _geodesic(root, adj, xy):
+    """2D geodesic distance from `root` to every node; the graph is a tree, so one pass."""
+    dist = np.full(len(adj), np.inf)
+    dist[root] = 0.0
+    q = deque([root])
+    while q:
+        n = q.popleft()
+        for m in adj[n]:
+            if np.isinf(dist[m]):
+                dist[m] = dist[n] + float(np.linalg.norm(xy[m] - xy[n]))
+                q.append(m)
+    return dist
+
+
+def _find_root(node_pt, adj, xy):
+    """-> (root, residual). The root is the node whose geodesic distances reproduce the
+    sampled nodes' pseudotime, which is NOT always a node that carries a sample: on the
+    rebuilt tree it is node 34, and taking the sampled node of least pseudotime instead
+    put every sample-free node out by exactly the 0.0595 that separates the two."""
+    sampled = np.where(~np.isnan(node_pt))[0]
+    resid = np.array([np.abs(node_pt[sampled] - _geodesic(r, adj, xy)[sampled]).max()
+                      for r in range(len(adj))])
+    root = int(np.argmin(resid))
+    return root, float(resid[root])
 
 
 def _fill_branches(branch, adj):
@@ -88,22 +117,18 @@ def main(argv=None) -> int:
     node_pt = np.full(n_nodes, np.nan)
     for node, sub in smp.groupby("node_id"):
         node_pt[int(node)] = sub["pseudotime"].iloc[0]
-    root = int(np.nanargmin(node_pt))
-    dist = np.full(n_nodes, np.inf)
-    dist[root] = 0.0
-    order = [root]
-    q = deque([root])
-    while q:                                   # tree: one pass, no relaxation needed
-        n = q.popleft()
-        for m in adj[n]:
-            if np.isinf(dist[m]):
-                dist[m] = dist[n] + float(np.linalg.norm(xy[m] - xy[n]))
-                order.append(m)
-                q.append(m)
+    root, resid = _find_root(node_pt, adj, xy)
+    if resid > _ROOT_TOL:
+        raise SystemExit(
+            f"no node reproduces the sampled pseudotime as a geodesic distance (best is "
+            f"node {root} at {resid:.3e} > {_ROOT_TOL:g}). Pseudotime is not the 2D "
+            f"geodesic from a root on this tree, so the sample-free nodes cannot be "
+            f"filled in and the minimap would be wrong.")
+    dist = _geodesic(root, adj, xy)
     fixed = ~np.isnan(node_pt)
-    resid = np.abs(node_pt[fixed] - dist[fixed]).max()
     node_pt = np.where(fixed, node_pt, dist)
-    print(f"{n_nodes} nodes, {len(edges)} edges, root={root}; "
+    print(f"{n_nodes} nodes, {len(edges)} edges, root={root} "
+          f"({'carries' if fixed[root] else 'carries no'} sample); "
           f"pseudotime vs 2D geodesic max |diff| on sampled nodes = {resid:.2e}")
 
     node_branch = np.full(n_nodes, -1, dtype=int)

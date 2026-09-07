@@ -883,6 +883,9 @@ function writeHash() {
 }
 function prettyItem(it) {
   if (String(it).startsWith('Branch_')) return 'Branch ' + String(it).split('_')[1];
-  if (String(it).startsWith('cohort_mean')) return 'Cohort mean (all 233)';
+  if (String(it).startsWith('cohort_mean')) {
+    const n = String(it).match(/cohort_mean_(\d+)/);
+    return n ? `Cohort mean (all ${n[1]})` : 'Cohort mean';
+  }
   return String(it);
 }
