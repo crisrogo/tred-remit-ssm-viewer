@@ -9,13 +9,20 @@ branch is instead sampled at K pseudotime knots.
 At a knot the score vector is read off a straight-line fit of the branch members' scores
 against pseudotime, not from the members near that knot. Within a branch the scores are
 close to linear in pseudotime: on the rebuilt tree a quadratic term recovers at most 6.8%
-of the linear residual variance in ED and 7.9% in ES, worst branch of six. A fit also uses
-all the members rather than the handful sitting near a knot, so it is both the better
-estimate and far less noisy at the branch ends where members thin out.
+of the linear residual variance in ED (branch 5, n 27) and 7.9% in ES (branch 0, n 31),
+worst branch of six. A fit also uses all the members rather than the handful sitting near a
+knot, so it is both the better estimate and far less noisy at the branch ends where members
+thin out.
 
-The bound depends on the smallest branch. The pre-rebuild seven-branch tree had a branch of
-ten members where the quadratic recovered 13.2% (ED) and 19.9% (ES); the rebuilt tree's
-smallest branch holds 27, and no branch exceeds 7.9%.
+Read those against the chance floor, not against zero. One extra parameter removes an
+expected 1/(n - 2) of the residual under pure noise, verified by simulation, so a branch of
+27 scores 4.0% and one of 31 scores 3.5% with no curvature at all. The rebuilt tree's worst
+branches sit at 1.7 and 2.3 times their floor.
+
+This is also why the raw fraction is NOT comparable across trees. The pre-rebuild
+seven-branch tree reached 13.2% (ED) and 19.9% (ES) on a branch of ten members, whose floor
+is 12.5%: the ED figure was chance and the ES figure 1.6 times it. The rebuilt tree's
+smaller raw numbers come from larger branches, not from straighter ones.
 
 Knots are spaced evenly between two percentiles of the members' pseudotime (default the
 5th and 95th), so they stay inside the observed range without being dragged by the tails.

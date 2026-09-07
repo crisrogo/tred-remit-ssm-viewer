@@ -141,8 +141,11 @@ comes from a straight-line fit of the members' scores against pseudotime; within
 the relationship is close to linear (on the rebuilt tree a quadratic term recovers at most
 6.8% of the linear residual variance in ED and 7.9% in ES, worst branch of six), so the fit
 is both more accurate and much less noisy than averaging the few members sitting near a
-knot. The bound is set by the smallest branch, so it tightened when the tree went from
-seven branches to six: the old tree had a ten-member branch reaching 19.9%. Percentiles are used only for the
+knot. Those fractions are to be read against a chance floor of 1/(n - 2), which is 4.0% for
+the 27-member branch and 3.5% for the 31-member one, so the worst branches carry about twice
+the curvature an extra parameter buys for free. The raw fraction does not compare across
+trees: the old seven-branch tree reached 19.9% only on a branch of ten, whose floor is
+12.5%. Percentiles are used only for the
 endpoints, not for the knots themselves: pseudotime is a node property and a branch's
 terminal node carries many samples at once, so percentile knots collapse onto each other.
 
