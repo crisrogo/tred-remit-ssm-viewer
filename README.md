@@ -179,47 +179,32 @@ they only need rebuilding when the SSM itself changes, not when the tree is refi
 
 Finally commit `data/ED.json`, `data/ES.json`, `data/tree.json` and `data/manifest.json`.
 
-## State of the data: `data/` is one model behind
+## State of the data: rebuilt on the current model, 2026-09-08
 
-`data/ED.json`, `data/ES.json`, `data/tree.json` and `data/manifest.json` were built on
-2026-08-24, against the seven-branch tree of 233 observations and a shape model with 31 ED
-and 22 ES modes. Both atlases have since been refitted with the phantom scan
-`TRED_1-012-004_` removed (ED 2026-08-28, ES 2026-09-01), which leaves **30 ED and 23 ES
-modes and a six-branch tree of 193 observations**. Nothing in `data/` reflects that.
+`data/` was rebuilt against the refitted atlases (ED 2026-08-28, ES 2026-09-01) with the
+phantom scan `TRED_1-012-004_` removed. It now carries **30 ED modes, 23 ES modes and the
+six-branch tree of 193 observations**, replacing the 2026-08-24 build with 31, 22 and seven
+branches over 233.
 
-Two of the three rebuild steps are done and are on disk:
+What was shot, on the GPU cluster:
 
-- `data/tree.rebuilt_pending.json` is the minimap rebuilt from
-  `DDRTree_EDES_ortho_rebuilt/All_Visits`. It is *not* `data/tree.json`, because a
-  six-branch minimap over seven-branch mesh data would show a branch picker and a map that
-  disagree, which is worse than being uniformly out of date.
-- `DDRTree_EDES_ortho_rebuilt/branch_pt_ES_scores.csv` and its `_knots.json` hold the knot
-  score vectors, ready to shoot: six branches, three knots each, plus the template and
-  `cohort_mean_193`.
+| output | rows | meshes at `tp_10` |
+|---|---|---|
+| ED mode sweep, `TRED_REMIT_SSM/PCA/modes_rebuilt_30` | 61 (template + 2x30) | 488 |
+| ES mode sweep, `TRED_REMIT_SSM_ES/PCA/modes_rebuilt_23` | 47 (template + 2x23) | 376 |
+| ES branch knots, `TRED_REMIT_SSM_ES/PCA/branch_pt_rebuilt` | 20 (template + 6x3 + cohort mean) | 160 |
 
-The third step needs geodesic shooting, and the refitted atlas momenta, control points and
-template exist only on the GPU cluster, not on `/media/croderog/Bob`. Until the modes and
-branch knots are shot on the rebuilt basis and converted, `data/` stays where it is.
+Checks that were run rather than assumed. Mode 1 must be the size mode, and it is: its
++/-3 SD sweep moves the LV cavity 61.2 to 350.6 mL in ED and 4.2 to 332.7 mL in ES, the
+largest swing of any mode in either phase against a median of about 10 mL. The branch knots
+progress monotonically along pseudotime where the branch has a size gradient (Branch_1 runs
+79, 100, 122 mL) and stay flat where it does not (Branch_4 at 138 mL throughout). The meshes
+were rendered and looked at, not just measured.
 
-The staged minimap was checked against the one it will replace so the eventual swap is a
-straight rename: identical top-level keys, identical branch-record fields, node and sample
-records of the same length, every branch path and edge indexing inside the 107 nodes, and
-every branch id that a sample cites present in `branches`. `pt_min` is now **0.0** where the
-old file began at 0.0595, which is the root fix showing through. The six branches use exactly
-the six `_BRANCH_PALETTE` entries, so the golden-ratio fallback for a seventh never fires and
-the palette question the handoff raised does not arise.
-
-To finish, shoot both mode sweeps and the branch knots against the rebuilt atlases, then:
-
-```bash
-venv/bin/python3 tools/build_web_meshes.py --phase ES \
-    --branch_dir <shot branch knots> \
-    --branch_knots <...>/DDRTree_EDES_ortho_rebuilt/branch_pt_ES_scores_knots.json \
-    --mode_dir <shot ES mode sweep> --out_dir data
-venv/bin/python3 tools/build_web_meshes.py --phase ED --mode_dir <shot ED mode sweep> \
-    --out_dir data
-mv data/tree.rebuilt_pending.json data/tree.json
-```
+Note the -3 SD end of ES mode 1 reconstructs a 4.2 mL cavity, which is anatomically
+impossible. That is a three-standard-deviation linear extrapolation in a nonlinear shape
+space, not a defect, and the previous build did the same; treat the extremes of the slider as
+illustrative rather than as plausible hearts.
 
 ## Branch shapes currently in the viewer
 

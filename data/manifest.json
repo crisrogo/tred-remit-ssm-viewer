@@ -33,8 +33,7 @@
         27,
         28,
         29,
-        30,
-        31
+        30
       ],
       "n_sd": 3.0
     },
@@ -47,8 +46,7 @@
         "Branch_3",
         "Branch_4",
         "Branch_5",
-        "Branch_6",
-        "cohort_mean_233"
+        "cohort_mean_193"
       ],
       "modes": [
         1,
@@ -72,7 +70,8 @@
         19,
         20,
         21,
-        22
+        22,
+        23
       ],
       "n_sd": 3.0,
       "branch_source": "shot"
