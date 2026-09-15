@@ -21,11 +21,11 @@ Output:
 
 Run (system python3 with pyvista):
   python3 tools/build_web_meshes.py --phase ES \
-      --branch_dir   /media/.../DDRTree_EDES_ortho/branch_pt_meshes_ES \
-      --branch_knots /media/.../DDRTree_EDES_ortho/branch_pt_ES_scores_knots.json \
-      --mode_dir     /media/.../DDRTree_EDES_ortho/mode_scores_ES --out_dir data
+      --branch_dir   /media/.../DDRTree_EDES_ortho_rebuilt/branch_pt_meshes_ES \
+      --branch_knots /media/.../DDRTree_EDES_ortho_rebuilt/branch_pt_ES_scores_knots.json \
+      --mode_dir     /media/.../DDRTree_EDES_ortho_rebuilt/mode_scores_ES --out_dir data
   python3 tools/build_web_meshes.py --phase ED \
-      --mode_dir   /media/.../DDRTree_EDES_ortho/mode_scores_ED --out_dir data
+      --mode_dir   /media/.../DDRTree_EDES_ortho_rebuilt/mode_scores_ED --out_dir data
 """
 from __future__ import annotations
 

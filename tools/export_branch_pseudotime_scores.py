@@ -93,20 +93,20 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--phase", required=True, choices=["ED", "ES"])
-    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho/All_Visits")
+    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho_rebuilt/All_Visits")
     ap.add_argument("--pca_csv", default=None, help="defaults to PCA_<phase>/PCA.csv")
     ap.add_argument("--n_knots", type=int, default=3,
                     help="knots per branch, evenly spaced across --span (odd keeps a midpoint)")
     ap.add_argument("--span", default="5,95",
                     help="member-pseudotime percentiles bounding the knots")
     ap.add_argument("--out_csv", default=None,
-                    help="defaults to DDRTree_EDES_ortho/branch_pt_<phase>_scores.csv")
+                    help="defaults to DDRTree_EDES_ortho_rebuilt/branch_pt_<phase>_scores.csv")
     ap.add_argument("--out_json", default=None,
                     help="knot bookkeeping for the viewer build; defaults next to --out_csv")
     args = ap.parse_args(argv)
 
     pca_csv = args.pca_csv or f"{_BASE}/PCA_{args.phase}/PCA.csv"
-    out_csv = args.out_csv or f"{_BASE}/DDRTree_EDES_ortho/branch_pt_{args.phase}_scores.csv"
+    out_csv = args.out_csv or f"{_BASE}/DDRTree_EDES_ortho_rebuilt/branch_pt_{args.phase}_scores.csv"
     out_json = args.out_json or out_csv.replace(".csv", "_knots.json")
     span = [float(x) for x in args.span.split(",")]
 

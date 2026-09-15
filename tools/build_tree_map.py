@@ -93,7 +93,7 @@ def _fill_branches(branch, adj):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho/All_Visits")
+    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho_rebuilt/All_Visits")
     ap.add_argument("--out", default="data/tree.json")
     args = ap.parse_args(argv)
 
@@ -142,6 +142,10 @@ def main(argv=None) -> int:
 
     branch_ids = sorted(smp["branch_id"].unique())
     st = stats.set_index("branch_id")
+    # Sample counts come from the assignments. branch_statistics.csv counts a sample sitting
+    # at a branch junction once in each branch, which overstates two branches and makes the
+    # counts sum past the number of samples.
+    n_in = smp["branch_id"].value_counts()
     branches = {}
     for b in branch_ids:
         members = np.where(node_branch == b)[0]
@@ -150,14 +154,14 @@ def main(argv=None) -> int:
         branches[f"Branch_{b}"] = {
             "id": int(b),
             "path": path,
-            "n_samples": int(r["n_samples"]),
+            "n_samples": int(n_in[b]),
             "n_nodes": int(r["n_nodes"]),
             "length": round(float(r["branch_length"]), 4),
             "pt_min": round(float(node_pt[path].min()), 6),
             "pt_max": round(float(node_pt[path].max()), 6),
             "color": _PALETTE[int(b) % len(_PALETTE)],
         }
-        print(f"  Branch_{b}: {len(path)} nodes, {int(r['n_samples'])} samples, "
+        print(f"  Branch_{b}: {len(path)} nodes, {int(n_in[b])} samples, "
               f"pt [{branches[f'Branch_{b}']['pt_min']:.3f}, "
               f"{branches[f'Branch_{b}']['pt_max']:.3f}]")
 

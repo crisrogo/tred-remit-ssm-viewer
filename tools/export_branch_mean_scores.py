@@ -12,7 +12,7 @@ phase's SSM) to shoot the branch-mean meshes, then tools/build_web_meshes.py to 
 phase to the viewer.
 
 Row order (the Shooting_<index> order downstream):
-  0 template, 1..5 = Branch_0..4, 6 = cohort_mean_233.
+  0 template, 1..K = Branch_0..K-1, K+1 = cohort_mean_<n observations>.
 
 Run (project venv):
   venv_TRED_REMIT_analysis/bin/python3 tools/export_branch_mean_scores.py --phase ED
@@ -31,14 +31,14 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--phase", required=True, choices=["ED", "ES"])
-    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho/All_Visits")
+    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho_rebuilt/All_Visits")
     ap.add_argument("--pca_csv", default=None, help="defaults to PCA_<phase>/PCA.csv")
     ap.add_argument("--out_csv", default=None,
-                    help="defaults to DDRTree_EDES_ortho/branch_mean_<phase>_scores.csv")
+                    help="defaults to DDRTree_EDES_ortho_rebuilt/branch_mean_<phase>_scores.csv")
     args = ap.parse_args(argv)
 
     pca_csv = args.pca_csv or f"{_BASE}/PCA_{args.phase}/PCA.csv"
-    out_csv = args.out_csv or f"{_BASE}/DDRTree_EDES_ortho/branch_mean_{args.phase}_scores.csv"
+    out_csv = args.out_csv or f"{_BASE}/DDRTree_EDES_ortho_rebuilt/branch_mean_{args.phase}_scores.csv"
 
     assign = pd.read_csv(f"{args.tree_dir}/sample_branch_assignments.csv")
     assign["branch"] = assign["branch_id"].astype(int)
@@ -55,7 +55,7 @@ def main(argv=None) -> int:
         members = br.index[br == b]
         ids.append(f"Branch_{b}"); rows.append(scores.loc[members].mean().values)
         print(f"  Branch {b}: {len(members)} obs")
-    ids.append("cohort_mean_233"); rows.append(scores.mean().values)
+    ids.append(f"cohort_mean_{len(common)}"); rows.append(scores.mean().values)
 
     out = pd.DataFrame(rows, columns=pc_cols); out.insert(0, "ID", ids)
     out.to_csv(out_csv, index=False)

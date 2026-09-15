@@ -122,7 +122,7 @@ branch count, membership and pseudotime all move. Three things have to be rebuil
 
 ```bash
 venv_TRED_REMIT_analysis/bin/python3 tools/build_tree_map.py
-# --tree_dir defaults to DDRTree_EDES_ortho/All_Visits
+# --tree_dir defaults to DDRTree_EDES_ortho_rebuilt/All_Visits
 ```
 
 **2. The branch score knots** — one PC-score row per branch per pseudotime knot:
@@ -228,7 +228,7 @@ shooting, and the viewer says so in its status line while it is in use.
 ## Data provenance
 
 Branches are the phenotypes of the combined ortho DDRTree (feature matrix
-`[PC_ED | ES-perp]`, 233 observations, currently six branches). Pseudotime is the geodesic
+`[PC_ED | ES-perp]`, 193 observations, six branches). Pseudotime is the geodesic
 distance from the root node along the tree; it is a node property, so `tools/build_tree_map.py`
 recovers it exactly for the nodes that carry no sample. Displacement is measured against the
 SSM template (the `mean` reference, morph slider = 0).
