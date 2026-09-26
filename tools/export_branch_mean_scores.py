@@ -31,14 +31,14 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--phase", required=True, choices=["ED", "ES"])
-    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho_rebuilt/All_Visits")
+    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho_fixed/All_Visits")
     ap.add_argument("--pca_csv", default=None, help="defaults to PCA_<phase>/PCA.csv")
     ap.add_argument("--out_csv", default=None,
-                    help="defaults to DDRTree_EDES_ortho_rebuilt/branch_mean_<phase>_scores.csv")
+                    help="defaults to DDRTree_EDES_ortho_fixed/branch_mean_<phase>_scores.csv")
     args = ap.parse_args(argv)
 
     pca_csv = args.pca_csv or f"{_BASE}/PCA_{args.phase}/PCA.csv"
-    out_csv = args.out_csv or f"{_BASE}/DDRTree_EDES_ortho_rebuilt/branch_mean_{args.phase}_scores.csv"
+    out_csv = args.out_csv or f"{_BASE}/DDRTree_EDES_ortho_fixed/branch_mean_{args.phase}_scores.csv"
 
     assign = pd.read_csv(f"{args.tree_dir}/sample_branch_assignments.csv")
     assign["branch"] = assign["branch_id"].astype(int)

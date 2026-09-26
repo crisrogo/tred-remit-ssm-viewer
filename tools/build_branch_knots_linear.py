@@ -43,7 +43,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--phase", required=True, choices=["ED", "ES"])
-    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho_rebuilt/All_Visits")
+    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho_fixed/All_Visits")
     ap.add_argument("--pca_csv", default=None, help="defaults to PCA_<phase>/PCA.csv")
     ap.add_argument("--n_knots", type=int, default=3)
     ap.add_argument("--span", default="5,95")

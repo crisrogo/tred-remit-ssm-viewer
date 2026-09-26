@@ -33,8 +33,8 @@ the same maximum. In "Towards branch" this means the midpoint shape does not qui
 top of the bar, which is the honest reading: the midpoint is less extreme than the tip.
 
 A URL hash deep-links a view, carrying only the quantity that is live:
-`#modes/ES/5/2` (ES mode 5 at +2 SD), `#branches/ES/Branch_3/along/1.102` (Branch 3 at
-pseudotime 1.102), `#branches/ES/Branch_3/blend/0.60` (Branch 3, 60% of the way to its
+`#modes/ES/5/2` (ES mode 5 at +2 SD), `#branches/ES/Branch_2/along/1.102` (Branch 2 at
+pseudotime 1.102), `#branches/ES/Branch_2/blend/0.60` (Branch 2, 60% of the way to its
 midpoint shape).
 
 It is a single static page (Three.js, no build step) and runs on GitHub Pages.
@@ -122,7 +122,7 @@ branch count, membership and pseudotime all move. Three things have to be rebuil
 
 ```bash
 venv_TRED_REMIT_analysis/bin/python3 tools/build_tree_map.py
-# --tree_dir defaults to DDRTree_EDES_ortho_rebuilt/All_Visits
+# --tree_dir defaults to DDRTree_EDES_ortho_fixed/All_Visits
 ```
 
 **2. The branch score knots** — one PC-score row per branch per pseudotime knot:
@@ -178,6 +178,18 @@ Mode meshes are shot the same way from `DDRTree/export_mode_scores.py --phase ES
 they only need rebuilding when the SSM itself changes, not when the tree is refitted.
 
 Finally commit `data/ED.json`, `data/ES.json`, `data/tree.json` and `data/manifest.json`.
+
+## State of the data: the three-branch tree, 2026-09-26
+
+The combined tree was refitted on 2026-09-25 after a defect in the branch refinement was fixed
+(it merged short branches into slots that had already been emptied, so the result depended on
+node order). The refit, `DDRTree_EDES_ortho_fixed/`, keeps the embedding, skeleton and
+pseudotime of the previous fit and has three branches of 74, 80 and 78 observations. Its branches
+1 and 2 hold exactly the observations of the previous branches 0 and 3, and their knot meshes are
+byte-identical to the previous ones; branch 0 joins the previous branches 1 and 2 and was shot
+anew (`TRED_REMIT_SSM_ES/PCA/branch_pt_fixed3`, 11 rows: template, 3 x 3 knots, cohort mean).
+`tree.json`, `ES.json` and `manifest.json` were rebuilt; the mode meshes are unchanged. The
+section below records the earlier builds.
 
 ## State of the data: rebuilt on the current model, 2026-09-08
 

@@ -855,9 +855,9 @@ function hexToRgb(h) {
   const n = parseInt(h.replace('#', ''), 16);
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
-// #<view>/<phase>/<item>/<morph>[/<pseudotime>]  e.g. #branches/ES/Branch_3/1.00/1.10
-// Tree:  #branches/<phase>/<item>/<vary>/<value>   e.g. #branches/ES/Branch_3/along/1.102
-//                                                       #branches/ES/Branch_3/blend/0.60
+// #<view>/<phase>/<item>/<morph>[/<pseudotime>]  e.g. #branches/ES/Branch_2/1.00/1.10
+// Tree:  #branches/<phase>/<item>/<vary>/<value>   e.g. #branches/ES/Branch_2/along/1.102
+//                                                       #branches/ES/Branch_2/blend/0.60
 // Modes: #modes/<phase>/<mode>/<sd>                e.g. #modes/ES/5/2
 // Only the quantity the "Vary" toggle exposes goes in the link; the other one is pinned, so
 // writing it down would suggest it could be set independently.

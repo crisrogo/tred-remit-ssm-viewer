@@ -93,7 +93,7 @@ def _fill_branches(branch, adj):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho_rebuilt/All_Visits")
+    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho_fixed/All_Visits")
     ap.add_argument("--out", default="data/tree.json")
     args = ap.parse_args(argv)
 
