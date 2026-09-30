@@ -42,7 +42,13 @@ It is a single static page (Three.js, no build step) and runs on GitHub Pages.
 ## What the panel controls
 
 Hovering DDRTree or Modes gives a short definition of each, and the same applies to the
-Vary and Background buttons.
+Vary and Background buttons. A definition hides as soon as its button is clicked, so it
+does not sit over the controls below, and a touch-only screen does not show them.
+
+Switching between DDRTree and Modes brings each view back to where it was left: the phase,
+the mode or branch, and the slider. A phase button lights up as soon as it is clicked and
+pulses while that phase's meshes download; if another choice is made in the meantime, the
+later one wins.
 
 Every surface carries two tickboxes, one for the filled shape and one for its wireframe.
 The row above them, marked "all", turns a whole column on or off at once and shows a dash

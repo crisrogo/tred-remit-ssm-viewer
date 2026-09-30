@@ -49,11 +49,27 @@ body {
   font-size: 11px; line-height: 1.35; text-align: left; text-transform: none;
   box-shadow: 0 4px 14px rgba(0, 0, 0, .45);
   opacity: 0; visibility: hidden; pointer-events: none;
-  transition: opacity .12s ease .35s, visibility 0s linear .35s;
+  /* Only showing waits (below); leaving hides it at once, or it lingers over the next control. */
+  transition: opacity .12s ease, visibility 0s linear .12s;
 }
-.seg button[data-tip]:hover::after,
+/* A touch-only screen has no real hover: a tap leaves :hover stuck on, and the definition
+   with it. Any mouse at all (a touch laptop too) keeps the definitions. */
+@media (any-hover: hover) {
+  .seg button[data-tip]:hover::after {
+    opacity: 1; visibility: visible; transition-delay: .35s, 0s;
+  }
+}
 .seg button[data-tip]:focus-visible::after {
   opacity: 1; visibility: visible; transition-delay: .35s, 0s;
+}
+/* Set by a click and cleared when the pointer leaves: the definition has done its job. */
+.seg button[data-tip].tip-off::after { opacity: 0; visibility: hidden; transition: none; }
+
+/* The button whose phase is still downloading pulses until the data arrives. */
+.seg button.loading { animation: seg-loading .8s ease-in-out infinite alternate; }
+@keyframes seg-loading { to { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) {
+  .seg button.loading { animation: none; opacity: .6; }
 }
 
 select, input[type=range] { width: 100%; }

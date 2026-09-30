@@ -48,6 +48,8 @@ const TAG_NAMES = {
 let manifest, tree, ramp;
 const phaseCache = {};
 const state = { view: null, phase: null, item: null, t: 0, pt: 0, vary: 'blend', bg: 'dark' };
+const leftAt = {};     // view -> where it was left, in parseHash() form, restored on return
+let phaseTicket = 0;   // bumped by every phase or view choice; a stale download gives way
 let scene, camera, renderer, radius = 100;
 let pivot;
 const spin = { vx: 0, vy: 0 };
@@ -269,6 +271,7 @@ function buildViewToggle() {
     const b = document.createElement('button');
     b.textContent = label; b.dataset.view = key; b.dataset.tip = tip;
     b.addEventListener('click', () => selectView(key));
+    hideTipOnClick(b);
     box.appendChild(b);
   }
 }
@@ -282,6 +285,7 @@ function buildVaryToggle() {
     const b = document.createElement('button');
     b.textContent = label; b.dataset.vary = key; b.dataset.tip = tip;
     b.addEventListener('click', () => selectVary(key));
+    hideTipOnClick(b);
     box.appendChild(b);
   }
 }
@@ -295,9 +299,18 @@ function buildBgToggle() {
     const b = document.createElement('button');
     b.textContent = label; b.dataset.bg = key; b.dataset.tip = tip;
     b.addEventListener('click', () => selectBackground(key));
+    hideTipOnClick(b);
     box.appendChild(b);
   }
   selectBackground(state.bg);
+}
+// A hover definition has done its job once the button is clicked. Hide it until the pointer
+// leaves (or focus moves on), or it sits over the controls below: the Modes definition used
+// to cover the ED and ES buttons just as they appeared.
+function hideTipOnClick(b) {
+  b.addEventListener('click', () => b.classList.add('tip-off'));
+  b.addEventListener('pointerleave', () => b.classList.remove('tip-off'));
+  b.addEventListener('blur', () => b.classList.remove('tip-off'));
 }
 // Changing the background also recolours the wireframe and (through CSS) the in-view
 // minimap, so nothing is left drawn in a colour that has just become the background.
@@ -530,14 +543,30 @@ function activeKnots() {
 async function selectPhase(phase, hint = {}) {
   if (!manifest.phases[phase]?.available) return;
   if (!pivot) return;   // scene never initialised (e.g. WebGL unavailable)
-  document.getElementById('note').textContent = 'Loading…';
-  if (!phaseCache[phase]) phaseCache[phase] = await fetchJSON(`${DATA}/${phase}.json`);
-  const data = phaseCache[phase];
-  state.phase = phase;
-  radius = data.radius || 100;
+  // Light the buttons now, not when the data arrives: a phase file is several megabytes, and
+  // a button that stayed dark until then looked as if the click had been ignored. The ticket
+  // makes the latest click win if another lands while this one is still downloading.
+  const ticket = ++phaseTicket;
   setActive('#phase-toggle button', 'phase', phase);
   setActive('#view-toggle button', 'view', state.view);
   refreshPhaseToggle();
+  // Pulse only while downloading; a cached phase also clears the pulse of a dropped download.
+  setLoading(!phaseCache[phase]);
+  if (!phaseCache[phase]) {
+    try {
+      phaseCache[phase] = await fetchJSON(`${DATA}/${phase}.json`);
+    } catch (err) {
+      // Put the buttons back on the phase still drawn before the error is reported.
+      if (ticket === phaseTicket) setActive('#phase-toggle button', 'phase', state.phase);
+      throw err;
+    } finally {
+      if (ticket === phaseTicket) setLoading(false);
+    }
+    if (ticket !== phaseTicket) return;   // a later click took over; the data stays cached
+  }
+  const data = phaseCache[phase];
+  state.phase = phase;
+  radius = data.radius || 100;
 
   // Switching phase rebuilds every mesh, so drop the old GPU buffers rather than leaking
   // them. The fill and the wireframe share one geometry, hence one dispose.
@@ -562,30 +591,57 @@ async function selectPhase(phase, hint = {}) {
   updateSliderConfig();
   frameCamera();
   selectItem(state.item, hint);
-  const ph = manifest.phases[phase];
+  writeSummary();
+}
+// The line at the foot of the panel: what the loaded phase holds.
+function writeSummary() {
+  const ph = manifest.phases[state.phase];
   const src = ph.branch_source === 'linearised'
     ? ' Branch shapes are the linearised stand-in, not geodesic shootings.' : '';
   const nBranch = (ph.branches || []).filter(b => String(b).startsWith('Branch_')).length;
+  const nTags = Object.keys(phaseCache[state.phase].tags).length;
   document.getElementById('note').textContent =
     `${nBranch} branches, ${(ph.modes || []).length} modes, ` +
-    `${tags.length} surfaces. Drag to rotate.${src}`;
+    `${nTags} surfaces. Drag to rotate.${src}`;
+}
+// While a phase downloads, the button that asked for it pulses. The note at the foot of the
+// panel says so too, but on most screens it is out of sight. In the tree view the phase
+// buttons are hidden, so there the view button carries the pulse.
+function setLoading(on) {
+  document.querySelectorAll('.seg button.loading').forEach(b => b.classList.remove('loading'));
+  if (!on) return;
+  const sel = state.view === 'modes' ? '#phase-toggle button.active' : '#view-toggle button.active';
+  document.querySelector(sel)?.classList.add('loading');
+  document.getElementById('note').textContent = 'Loading…';
 }
 function selectView(view) {
   if (view === state.view) return;
+  // Keep where this view stands, so coming back to it restores the same phase, item and
+  // slider value. The hash already holds exactly that, in deep-link form, because writeHash
+  // runs after every change; restoring it goes through the same path as a deep link.
+  leftAt[state.view] = parseHash();
+  const back = leftAt[view] || {};
+  // A view switch outranks a phase still downloading from an earlier click: drop that load
+  // and put the phase buttons back on the phase that is drawn.
+  phaseTicket++;
+  setLoading(false);
+  setActive('#phase-toggle button', 'phase', state.phase);
   state.view = view;
   setActive('#view-toggle button', 'view', view);
   refreshPhaseToggle();
-  // The tree is always drawn end-systolic, so entering it switches the loaded phase; leaving
-  // it keeps whichever phase you were in, as long as that phase has modes.
-  const want = view === 'branches' ? TREE_PHASE : state.phase;
+  // The tree is always drawn end-systolic, so entering it switches the loaded phase. Coming
+  // back to Modes returns to the phase Modes was left in, not the tree's ES.
+  const want = view === 'branches' ? TREE_PHASE : (back.phase || state.phase);
   if (want !== state.phase || !hasItems(want, view)) {
     const alt = hasItems(want, view) ? want
       : ['ES', 'ED'].find(p => manifest.phases[p]?.available && hasItems(p, view));
-    if (alt) { selectPhase(alt); return; }
+    if (alt) { selectPhase(alt, back); return; }
   }
-  populateItems();
+  if (back.item) state.item = String(back.item);
+  populateItems();   // keeps state.item if this view lists it, else falls back to the first
   updateSliderConfig();
-  selectItem(state.item);
+  selectItem(state.item, back);
+  writeSummary();
 }
 function buildTagMesh(tag, entry) {
   const mean = new Float32Array(entry.mean);
