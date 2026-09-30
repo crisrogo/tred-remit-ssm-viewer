@@ -102,6 +102,20 @@ input[type=range] { accent-color: var(--accent); margin: 4px 0; }
 .treemap .root { fill: none; stroke: #9aa0ad; stroke-width: 1.6; }
 .treemap .head { stroke: #14161b; stroke-width: 2; }
 
+/* The Bonsai map: the tree drawn to scale, one dot per scan. The active clade's scans stay
+   bright and the rest fade, so the clade on screen reads at a glance. */
+#bonsai-colour { margin-bottom: 8px; }
+#bonsai-colour button { font-size: 12px; padding: 6px 0; }
+.bonsaimap { width: 100%; touch-action: none; }
+.bonsaimap svg { display: block; width: 100%; height: auto; cursor: crosshair; }
+.bonsaimap .bedge { stroke: #5a5f6c; stroke-width: .7; stroke-linecap: round; }
+.bonsaimap .bleaf { opacity: .85; }
+.bonsaimap .bleaf.dim { opacity: .14; }
+.blegend { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 6px; font-size: 11px;
+           color: var(--muted); }
+.blegend span { display: inline-flex; align-items: center; gap: 4px; }
+.blegend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
 /* Surfaces: [fill] [wire] [name], with a master row on top that toggles a whole column.
    Full anatomical names wrap on a narrow panel, so the boxes stay on the first line. */
 #tags { display: grid; grid-template-columns: 26px 26px 1fr; gap: 4px 8px; align-items: start; }

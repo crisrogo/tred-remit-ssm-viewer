@@ -19,6 +19,12 @@
 // columns share one geometry per surface, so the wireframe morphs with the fill. The tree
 // view also carries a second copy of the minimap over the 3D scene, captioned with the
 // branch on screen.
+//
+// BONSAI is a separate tree, reconstructed by Bonsai from the same shape features. Its clades
+// are a description of where scans sit on the tree, not separable groups. Each clade is one
+// shape, the mean of its scans, drawn in either phase's model, so the phase toggle appears and
+// the morph runs 0-100% from the template to the clade mean. The clade meshes live in their
+// own files (bonsai_<PHASE>.json), stored against the same mean shape as <PHASE>.json.
 import * as THREE from './vendor/three.module.js';
 
 const DATA = './data';
@@ -47,6 +53,10 @@ const TAG_NAMES = {
 
 let manifest, tree, ramp;
 const phaseCache = {};
+let bonsai = null;           // the Bonsai tree map (bonsai.json), or null if not built
+const bonsaiCache = {};      // phase -> clade meshes (bonsai_<PHASE>.json)
+let bonsaiColourBy = 'clade';
+let bmap = null;             // the Bonsai map's SVG and its leaf dots
 const state = { view: null, phase: null, item: null, t: 0, pt: 0, vary: 'blend', bg: 'dark' };
 const leftAt = {};     // view -> where it was left, in parseHash() form, restored on return
 let phaseTicket = 0;   // bumped by every phase or view choice; a stale download gives way
@@ -61,10 +71,12 @@ let maxDisp = 1;
 init().catch(showFatal);
 
 async function init() {
-  [manifest, tree] = await Promise.all([
+  [manifest, tree, bonsai] = await Promise.all([
     fetchJSON(`${DATA}/manifest.json`),
     fetchJSON(`${DATA}/tree.json`).catch(() => null),
+    fetchJSON(`${DATA}/bonsai.json`).catch(() => null),
   ]);
+  if (!manifest.bonsai) bonsai = null;   // a map without clade meshes has nothing to show
   document.title = manifest.title || document.title;
   ramp = buildRamp(manifest.colormap);
   document.getElementById('cbar').style.background =
@@ -89,11 +101,13 @@ async function init() {
     return;
   }
   if (tree) buildMinimaps();
+  if (bonsai) { buildBonsaiColourToggle(); buildBonsaiMap(); }
 
   const hint = parseHash();
   const phases = ['ES', 'ED'].filter(p => manifest.phases[p]?.available);
   state.phase = phases.includes(hint.phase) ? hint.phase : phases[0];
   state.view = (hint.view === 'modes' || hint.view === 'branches') ? hint.view
+             : (hint.view === 'bonsai' && bonsai) ? 'bonsai'
              : (hasItems(TREE_PHASE, 'branches') ? 'branches' : 'modes');
   if (state.view === 'branches') state.phase = TREE_PHASE;   // the tree is always ES
   await selectPhase(state.phase, hint);
@@ -120,7 +134,12 @@ function scaled(intArr, f) {
   return out;
 }
 function hasItems(phase, view) {
+  if (view === 'bonsai') return !!bonsai && ((manifest.bonsai || {})[phase] || []).length > 0;
   return ((manifest.phases[phase] || {})[view] || []).length > 0;
+}
+function itemList(phase, view) {
+  return view === 'bonsai' ? ((manifest.bonsai || {})[phase] || [])
+                           : ((manifest.phases[phase] || {})[view] || []);
 }
 // The displacement colourmap as a 256-entry lookup table. The manifest stores it as a list
 // of hex stops (viridis, which is perceptually uniform, so equal steps in displacement look
@@ -267,6 +286,10 @@ function buildViewToggle() {
     ['modes', 'Modes',
      'Principal components of the shape model: each mode is one independent pattern of ' +
      'shape variation, measured in standard deviations either side of the mean.'],
+    ...(bonsai ? [['bonsai', 'Bonsai',
+     'A second tree, reconstructed by Bonsai from the same shape features, whose branch ' +
+     'lengths keep the distances between hearts. Each clade shows the mean shape of its scans; ' +
+     'the clades are not separable groups.']] : []),
   ]) {
     const b = document.createElement('button');
     b.textContent = label; b.dataset.view = key; b.dataset.tip = tip;
@@ -348,21 +371,28 @@ function buildPhaseToggle() {
 // A phase button is usable only if that phase actually has modes; the whole group is hidden
 // in the tree view, where the phase is fixed to ES.
 function refreshPhaseToggle() {
+  const kind = state.view === 'bonsai' ? 'bonsai' : 'modes';
   for (const b of document.querySelectorAll('#phase-toggle button')) {
     const p = b.dataset.phase;
-    const ok = manifest.phases[p]?.available && hasItems(p, 'modes');
+    const ok = manifest.phases[p]?.available && hasItems(p, kind);
     b.disabled = !ok;
-    b.title = ok ? `${p} SSM` : `${p}: no modes built yet`;
+    b.title = ok ? `${p} SSM` : `${p}: no ${kind === 'bonsai' ? 'clade shapes' : 'modes'} built yet`;
   }
   for (const el of document.querySelectorAll('.mode-view')) el.hidden = state.view !== 'modes';
+  for (const el of document.querySelectorAll('.phase-view')) el.hidden = state.view === 'branches';
   for (const el of document.querySelectorAll('.tree-view')) el.hidden = state.view !== 'branches';
+  for (const el of document.querySelectorAll('.bonsai-view')) el.hidden = state.view !== 'bonsai';
+  const hint = document.getElementById('phase-hint');
+  if (hint) hint.textContent = state.view === 'bonsai'
+    ? 'Clade shapes are drawn in the chosen phase’s model.'
+    : 'Modes come from that phase’s own PCA.';
 }
 function setActive(sel, attr, val) {
   document.querySelectorAll(sel).forEach(b => b.classList.toggle('active', b.dataset[attr] === val));
 }
 function populateItems() {
   const sel = document.getElementById('item');
-  const list = manifest.phases[state.phase][state.view] || [];
+  const list = itemList(state.phase, state.view);
   sel.innerHTML = '';
   for (const it of list) {
     const o = document.createElement('option');
@@ -373,7 +403,7 @@ function populateItems() {
   if (!list.map(String).includes(String(state.item))) state.item = String(list[0]);
   sel.value = state.item;
   document.getElementById('item-label').textContent =
-    state.view === 'modes' ? 'Mode' : 'Branch';
+    state.view === 'modes' ? 'Mode' : state.view === 'bonsai' ? 'Clade' : 'Branch';
 }
 // One row per surface with two tickboxes: the filled shape ("fill") and its wireframe
 // ("wire"). A master row on top turns a whole column on or off at once, and shows the mixed
@@ -481,11 +511,18 @@ function updateSliderConfig(keepValue = false) {
     state.t = Math.min(1, Math.max(0, state.t));
     s.value = state.t;
     lab.innerHTML = 'Morph: <span id="morph-val"></span>';
-    ticks.innerHTML = `<span>ES template</span><span></span><span>branch</span>`;
-    hint.textContent = activeKnots()
-      ? '0% is the ES template (the SSM mean shape); 100% is this branch at the middle of ' +
-        'its pseudotime. In between, every vertex moves that fraction of the way.'
-      : '0% is the ES template (the SSM mean shape); 100% is this shape.';
+    if (state.view === 'bonsai') {
+      ticks.innerHTML = `<span>${state.phase} template</span><span></span><span>clade mean</span>`;
+      hint.textContent = `0% is the ${state.phase} template (the SSM mean shape); 100% is the ` +
+        `mean shape of this clade’s scans. In between, every vertex moves that fraction ` +
+        `of the way.`;
+    } else {
+      ticks.innerHTML = `<span>ES template</span><span></span><span>branch</span>`;
+      hint.textContent = activeKnots()
+        ? '0% is the ES template (the SSM mean shape); 100% is this branch at the middle of ' +
+          'its pseudotime. In between, every vertex moves that fraction of the way.'
+        : '0% is the ES template (the SSM mean shape); 100% is this shape.';
+    }
   }
   updateSliderLabel();
 }
@@ -509,6 +546,7 @@ function updateBranchControls(keepPt = false) {
   const showMap = state.view === 'branches' && !!tree;
   document.getElementById('map-group').hidden = !showMap;
   document.getElementById('viewmap').hidden = !showMap;
+  document.getElementById('bmap-group').hidden = !(state.view === 'bonsai' && bonsai);
   document.getElementById('ptime-group').hidden = !along;
   document.getElementById('morph-group').hidden = along;
   setActive('#vary-toggle button', 'vary', state.vary);
@@ -564,6 +602,19 @@ async function selectPhase(phase, hint = {}) {
     }
     if (ticket !== phaseTicket) return;   // a later click took over; the data stays cached
   }
+  // The Bonsai view also needs that phase's clade meshes, a separate and much smaller file.
+  if (state.view === 'bonsai' && !bonsaiCache[phase]) {
+    setLoading(true);
+    try {
+      bonsaiCache[phase] = await fetchJSON(`${DATA}/bonsai_${phase}.json`);
+    } catch (err) {
+      if (ticket === phaseTicket) setActive('#phase-toggle button', 'phase', state.phase);
+      throw err;
+    } finally {
+      if (ticket === phaseTicket) setLoading(false);
+    }
+    if (ticket !== phaseTicket) return;
+  }
   const data = phaseCache[phase];
   state.phase = phase;
   radius = data.radius || 100;
@@ -595,6 +646,14 @@ async function selectPhase(phase, hint = {}) {
 }
 // The line at the foot of the panel: what the loaded phase holds.
 function writeSummary() {
+  if (state.view === 'bonsai') {
+    const nClade = itemList(state.phase, 'bonsai').filter(c => /^C\d+$/.test(c)).length;
+    const nTags = Object.keys(phaseCache[state.phase].tags).length;
+    document.getElementById('note').textContent =
+      `${nClade} clades of a Bonsai tree of ${bonsai.n_scans} scans from ` +
+      `${bonsai.n_patients} patients, ${nTags} surfaces. Drag to rotate.`;
+    return;
+  }
   const ph = manifest.phases[state.phase];
   const src = ph.branch_source === 'linearised'
     ? ' Branch shapes are the linearised stand-in, not geodesic shootings.' : '';
@@ -610,7 +669,7 @@ function writeSummary() {
 function setLoading(on) {
   document.querySelectorAll('.seg button.loading').forEach(b => b.classList.remove('loading'));
   if (!on) return;
-  const sel = state.view === 'modes' ? '#phase-toggle button.active' : '#view-toggle button.active';
+  const sel = state.view === 'branches' ? '#view-toggle button.active' : '#phase-toggle button.active';
   document.querySelector(sel)?.classList.add('loading');
   document.getElementById('note').textContent = 'Loading…';
 }
@@ -632,7 +691,9 @@ function selectView(view) {
   // The tree is always drawn end-systolic, so entering it switches the loaded phase. Coming
   // back to Modes returns to the phase Modes was left in, not the tree's ES.
   const want = view === 'branches' ? TREE_PHASE : (back.phase || state.phase);
-  if (want !== state.phase || !hasItems(want, view)) {
+  // Entering Bonsai for the first time in a phase has to fetch that phase's clade meshes,
+  // which goes through selectPhase like any other download.
+  if (want !== state.phase || !hasItems(want, view) || (view === 'bonsai' && !bonsaiCache[want])) {
     const alt = hasItems(want, view) ? want
       : ['ES', 'ED'].find(p => manifest.phases[p]?.available && hasItems(p, view));
     if (alt) { selectPhase(alt, back); return; }
@@ -692,6 +753,13 @@ function selectItem(item, hint = {}) {
       // One colour scale for the whole branch, so sliding towards the distal end visibly
       // moves further rather than just recolouring to the same maximum.
       o.act.d.forEach(accumulateMax);
+    } else if (state.view === 'bonsai') {
+      // A clade is one shape, the mean of its scans, stored against the same mean shape as
+      // the phase file; it morphs exactly like a branch with a single knot.
+      const bd = bonsaiCache[state.phase];
+      o.act = { kind: 'branch', pt: null,
+                d: [scaled(bd.tags[tag].clades[item], 1 / bd.scale)] };
+      accumulateMax(o.act.d[0]);
     } else {
       const md = o.entry.modes[item];
       o.act = { kind: 'mode', minus: scaled(md.minus, f), plus: scaled(md.plus, f) };
@@ -889,6 +957,98 @@ function drawMarker() {
   const swatch = document.getElementById('viewmap-swatch');
   if (nameEl) nameEl.textContent = active ? prettyItem(active) : '–';
   if (swatch) swatch.style.background = br ? br.color : '#7f8797';
+  drawBonsaiActive();
+}
+
+// ---- Bonsai map ------------------------------------------------------------
+// The Bonsai tree drawn with an equal-angle layout (bonsai.json): branch lengths to scale, the
+// angles carry no information. One dot per scan, coloured by clade, cohort, outcome or visit.
+// The scans of the clade on screen stay bright; clicking a scan shows its clade.
+function buildBonsaiColourToggle() {
+  const box = document.getElementById('bonsai-colour');
+  box.innerHTML = '';
+  for (const [key, label] of [['clade', 'Clade'], ['cohort', 'Cohort'],
+                              ['outcome', 'Outcome'], ['visit', 'Visit']]) {
+    const b = document.createElement('button');
+    b.textContent = label; b.dataset.colour = key;
+    b.addEventListener('click', () => {
+      bonsaiColourBy = key;
+      setActive('#bonsai-colour button', 'colour', key);
+      colourBonsaiLeaves();
+    });
+    box.appendChild(b);
+  }
+  setActive('#bonsai-colour button', 'colour', bonsaiColourBy);
+}
+function buildBonsaiMap() {
+  const host = document.getElementById('bonsai-map');
+  const N = bonsai.nodes;
+  const xs = N.map(n => n[0]), ys = N.map(n => n[1]);
+  const pad = 0.04 * Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  const box = { x0: Math.min(...xs) - pad, x1: Math.max(...xs) + pad,
+                y0: Math.min(...ys) - pad, y1: Math.max(...ys) + pad };
+  const W = 240, H = Math.round(W * (box.y1 - box.y0) / (box.x1 - box.x0));
+  const X = x => (x - box.x0) / (box.x1 - box.x0) * W;
+  const Y = y => (box.y1 - y) / (box.y1 - box.y0) * H;
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const add = (tagName, attrs, cls) => {
+    const el = document.createElementNS(SVG_NS, tagName);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    if (cls) el.setAttribute('class', cls);
+    svg.appendChild(el);
+    return el;
+  };
+  for (const [u, v] of bonsai.edges) {
+    add('line', { x1: X(N[u][0]), y1: Y(N[u][1]), x2: X(N[v][0]), y2: Y(N[v][1]) }, 'bedge');
+  }
+  const dots = bonsai.leaves.map(l => add('circle', { cx: X(l[0]), cy: Y(l[1]), r: 2.3 }, 'bleaf'));
+  host.innerHTML = '';
+  host.appendChild(svg);
+  bmap = { svg, dots, X, Y };
+  // Click the nearest scan: its clade becomes the item on screen.
+  svg.addEventListener('pointerdown', e => {
+    const r = svg.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width * W, py = (e.clientY - r.top) / r.height * H;
+    let best = null;
+    bonsai.leaves.forEach((l, i) => {
+      const d = Math.hypot(X(l[0]) - px, Y(l[1]) - py);
+      if (!best || d < best.d) best = { d, i };
+    });
+    if (!best) return;
+    const clade = bonsai.legend.clade[bonsai.leaves[best.i][2]][0];
+    const sel = document.getElementById('item');
+    if (clade !== state.item && [...sel.options].some(o => o.value === clade)) {
+      sel.value = clade;
+      selectItem(clade);
+    }
+  });
+  colourBonsaiLeaves();
+}
+// Which legend entry a scan falls in, for the current colouring.
+function bonsaiLegendIndex(l) {
+  if (bonsaiColourBy === 'clade') return l[2];
+  if (bonsaiColourBy === 'cohort') return l[3];
+  if (bonsaiColourBy === 'outcome') return l[4];
+  return bonsai.legend.visit.findIndex(v => v[0] === `Visit ${l[5]}`);
+}
+function colourBonsaiLeaves() {
+  if (!bmap) return;
+  const legend = bonsai.legend[bonsaiColourBy];
+  bonsai.leaves.forEach((l, i) => bmap.dots[i].setAttribute('fill', legend[bonsaiLegendIndex(l)][1]));
+  // Legend: one swatch per group, with its number of scans
+  const counts = legend.map(() => 0);
+  for (const l of bonsai.leaves) counts[bonsaiLegendIndex(l)]++;
+  document.getElementById('bonsai-legend').innerHTML = legend
+    .map(([name, col], k) => counts[k] ? `<span><i style="background:${col}"></i>${name} (${counts[k]})</span>` : '')
+    .join('');
+}
+function drawBonsaiActive() {
+  if (!bmap) return;
+  const active = state.view === 'bonsai' ? state.item : null;
+  const k = active ? bonsai.legend.clade.findIndex(c => c[0] === active) : -1;
+  // The cohort mean belongs to every scan, so nothing is dimmed for it.
+  bonsai.leaves.forEach((l, i) => bmap.dots[i].classList.toggle('dim', k >= 0 && l[2] !== k));
 }
 // Where a pseudotime lands on a branch: the path nodes are ordered by pseudotime, so walk
 // to the bracketing pair and interpolate between their coordinates.
@@ -939,6 +1099,9 @@ function writeHash() {
 }
 function prettyItem(it) {
   if (String(it).startsWith('Branch_')) return 'Branch ' + String(it).split('_')[1];
+  if (bonsai && /^C\d+$/.test(String(it)) && bonsai.clades[it]) {
+    return `Clade ${it} (${bonsai.clades[it].n} scans)`;
+  }
   if (String(it).startsWith('cohort_mean')) {
     const n = String(it).match(/cohort_mean_(\d+)/);
     return n ? `Cohort mean (all ${n[1]})` : 'Cohort mean';

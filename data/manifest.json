@@ -105,5 +105,27 @@
     "mitral_valve",
     "pulmonary_valve",
     "tricuspid_valve"
-  ]
+  ],
+  "bonsai": {
+    "ES": [
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "C5",
+      "C6",
+      "C7",
+      "cohort_mean_232"
+    ],
+    "ED": [
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "C5",
+      "C6",
+      "C7",
+      "cohort_mean_232"
+    ]
+  }
 }

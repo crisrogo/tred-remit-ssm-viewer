@@ -39,6 +39,23 @@ midpoint shape).
 
 It is a single static page (Three.js, no build step) and runs on GitHub Pages.
 
+## The Bonsai view
+
+**Bonsai** shows a second tree, reconstructed by Bonsai (de Groot et al., Nature Biotechnology
+2026) from the same 232 scans and the same 53 shape features (`[PC_ED | ES-perp]`, adjusted for
+age and sex). It is a separate line of analysis from the DDRTree and is not compared with it. Its
+branch lengths keep the distances between hearts (the tree distance tracks the squared distance in
+the 53-D space with a squared Pearson correlation of 0.837), and it is drawn with an equal-angle
+layout in which the angles carry no information.
+
+The tree is cut into seven clades, C1 to C7 by size. The clades describe where scans sit on the
+tree; they are not separable groups (their silhouettes are no higher than those of clades cut from
+trees fitted to data without structure, and they change when a fifth of the patients is left out).
+Each clade is shown as one shape, the mean of its scans, in either phase, so the phase toggle
+appears; the morph runs 0% (the template, the SSM mean shape) to 100% (the clade mean). The map
+colours every scan by clade, cohort, outcome or visit, keeps the clade on screen bright, and
+selects a scan's clade on click. Deep link: `#bonsai/ES/C3/0.60`.
+
 ## What the panel controls
 
 Hovering DDRTree or Modes gives a short definition of each, and the same applies to the
@@ -184,6 +201,30 @@ Mode meshes are shot the same way from `DDRTree/export_mode_scores.py --phase ES
 they only need rebuilding when the SSM itself changes, not when the tree is refitted.
 
 Finally commit `data/ED.json`, `data/ES.json`, `data/tree.json` and `data/manifest.json`.
+
+## Rebuilding the Bonsai data
+
+The Bonsai analysis lives in `TRED_REMIT_analysis/bonsai/` (outputs under
+`Bonsai_EDES_ortho/`). Three steps, all non-destructive:
+
+```bash
+# 1. The map (project venv of TRED_REMIT_analysis)
+venv_TRED_REMIT_analysis/bin/python3 tools/build_bonsai_map.py
+# 2. Clade-mean scores, one file per phase, then shoot them on the SSM machine
+venv_TRED_REMIT_analysis/bin/python3 tools/export_bonsai_clade_scores.py --phase ES
+venv_TRED_REMIT_analysis/bin/python3 tools/export_bonsai_clade_scores.py --phase ED
+#    shape_analysis/shoot_branch_mean_shapes.py --num_components all (rows: template, C1..C7,
+#    cohort mean); copy the tp_10 meshes to Bonsai_EDES_ortho/viewer/meshes_<PHASE>/
+# 3. The meshes (system python3 with pyvista); refuses if the shooting's template is not the
+#    mean shape already in data/<PHASE>.json
+python3 tools/build_bonsai_meshes.py --phase ES --clade_dir .../Bonsai_EDES_ortho/viewer/meshes_ES
+python3 tools/build_bonsai_meshes.py --phase ED --clade_dir .../Bonsai_EDES_ortho/viewer/meshes_ED
+```
+
+Built on 2026-09-30: shot on gpu-422 in `TRED_REMIT_SSM{,_ES}/PCA/bonsai_clade_shapes` with every
+component (297 ED, 296 ES). With every component the reconstructed momenta of each clade equal the
+mean of its members' momenta to within 1e-14 at both phases, so the refitted PCA basis matched the
+scores. Both templates match the viewer's mean shapes exactly.
 
 ## State of the data: the three-branch tree, 2026-09-26
 

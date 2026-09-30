@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>TRED / REMIT cardiac SSM viewer</title>
-<link rel="stylesheet" href="./css/style.css?v=9">
+<link rel="stylesheet" href="./css/style.css?v=10">
 <!-- Surface any load/runtime error on the page (module-import failures, blocked file://
      fetches, WebGL problems) instead of failing silently on "Loading…". -->
 <script>
@@ -34,19 +34,20 @@
 <div id="app">
   <aside id="panel">
     <h1>Cardiac SSM viewer</h1>
-    <p class="sub">TRED / REMIT combined ortho DDRTree</p>
+    <p class="sub">TRED / REMIT combined shape model</p>
 
     <div class="group">
       <span class="lbl">Show</span>
       <div id="view-toggle" class="seg"></div>
     </div>
 
-    <!-- Modes only: a mode belongs to one phase's PCA, so the phase must be chosen. The
-         tree is a single combined fit and its shapes are always drawn in the ES model. -->
-    <div class="group mode-view" id="phase-group">
+    <!-- Modes and Bonsai: a mode belongs to one phase's PCA, and a Bonsai clade shape can be
+         drawn in either phase's model, so the phase must be chosen. The DDRTree is a single
+         combined fit and its shapes are always drawn in the ES model. -->
+    <div class="group phase-view" id="phase-group">
       <span class="lbl">Phase</span>
       <div id="phase-toggle" class="seg"></div>
-      <p class="hint">Modes come from that phase&rsquo;s own PCA.</p>
+      <p class="hint" id="phase-hint">Modes come from that phase&rsquo;s own PCA.</p>
     </div>
 
     <div class="group">
@@ -61,6 +62,18 @@
       <span class="lbl">Position on the tree</span>
       <div id="minimap" class="treemap"></div>
       <p class="hint" id="map-hint">Click a branch, or drag along it.</p>
+    </div>
+
+    <!-- Bonsai view only: the Bonsai tree of the 232 scans, coloured by clade or by a
+         clinical grouping. Clicking a scan shows the mean shape of its clade. -->
+    <div class="group bonsai-view" id="bmap-group" hidden>
+      <span class="lbl">Bonsai tree</span>
+      <div id="bonsai-colour" class="seg"></div>
+      <div id="bonsai-map" class="bonsaimap"></div>
+      <div id="bonsai-legend" class="blegend"></div>
+      <p class="hint">Each dot is a scan. Branch lengths are to scale; the angles carry no
+        information. The clades describe where scans sit on the tree and are not separable
+        groups. Click a scan to show its clade.</p>
     </div>
 
     <!-- Exactly one of the two below is live at a time. Both at once compounds: the branch
@@ -105,7 +118,7 @@
 
     <button id="reset">Reset view</button>
     <p id="note" class="note">Loading&hellip;</p>
-    <p class="ver">build 9 &middot; DDRTree along pseudotime</p>
+    <p class="ver">build 10 &middot; Bonsai clades</p>
 
     <!-- PLACEHOLDER: replace the link and the citation below once the paper is out.
          Nothing else reads these; edit the text in place. -->
@@ -127,6 +140,6 @@
     </div>
   </main>
 </div>
-<script type="module" src="./js/main.js?v=9"></script>
+<script type="module" src="./js/main.js?v=10"></script>
 </body>
 </html>
