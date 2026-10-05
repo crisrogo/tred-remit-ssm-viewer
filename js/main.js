@@ -281,8 +281,9 @@ function buildViewToggle() {
   box.innerHTML = '';
   for (const [key, label, tip] of [
     ['branches', 'DDRTree',
-     'Tree fitted to the whole cohort at once. Each branch is a group of hearts sharing a ' +
-     'shape phenotype, ordered along pseudotime from the root outwards.'],
+     'Tree fitted to the whole cohort at once: a map of the shape space. Each branch is a ' +
+     'region of that map, ordered along pseudotime from the root outwards; the branches are ' +
+     'not stable sub-phenotypes.'],
     ['modes', 'Modes',
      'Principal components of the shape model: each mode is one independent pattern of ' +
      'shape variation, measured in standard deviations either side of the mean.'],
@@ -875,7 +876,7 @@ function buildMinimap(host, W, H) {
   for (const [u, v] of tree.edges) {
     add('line', { x1: X(N[u][0]), y1: Y(N[u][1]), x2: X(N[v][0]), y2: Y(N[v][1]) }, 'skel');
   }
-  // Samples carry their branch colour, so the map reads as six phenotypes rather than one
+  // Samples carry their branch colour, so the map reads as regions of the tree instead of one
   // grey cloud; the active branch's members then brighten with it.
   for (const s of tree.samples) {
     const br = tree.branches[`Branch_${s[2]}`];

@@ -286,8 +286,10 @@ shooting, and the viewer says so in its status line while it is in use.
 
 ## Data provenance
 
-Branches are the phenotypes of the combined ortho DDRTree (feature matrix
-`[PC_ED | ES-perp]`, 193 observations, six branches). Pseudotime is the geodesic
+Branches are regions of the combined ortho DDRTree (feature matrix `[PC_ED | ES-perp]`),
+a map of shape space; since 2026-09-28 the paper does not treat them as sub-phenotypes, because
+the partition is not stable. (This section was written for the six-branch fit on 193
+observations; the current fit is described under "State of the data".) Pseudotime is the geodesic
 distance from the root node along the tree; it is a node property, so `tools/build_tree_map.py`
 recovers it exactly for the nodes that carry no sample. Displacement is measured against the
 SSM template (the `mean` reference, morph slider = 0).
