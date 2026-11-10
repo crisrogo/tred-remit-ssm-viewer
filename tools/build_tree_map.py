@@ -11,10 +11,16 @@ Two facts about the tree are exploited (both verified on the current run):
   - pseudotime is a NODE property (every sample at a node shares it) and equals the 2D
     geodesic distance from the root, so the ~40 nodes that carry no sample still get an
     exact pseudotime rather than an interpolated guess;
-  - no node mixes branches, so a majority vote per node is in fact unanimous. Sample-free
-    nodes inherit the branch of their nearest assigned neighbour along the graph, and are
-    left unassigned (-1, drawn grey) when two branches are equidistant, which is what the
-    junctions are.
+  - no node mixes branches, so a majority vote per node is in fact unanimous (the script
+    prints any node where it is not). Sample-free nodes inherit the branch of their nearest
+    assigned neighbour along the graph, and are left unassigned (-1, drawn grey) when two
+    branches are equidistant, which is what the junctions are.
+
+A branch's path is the graph path from its most proximal to its most distal node, within the
+largest connected part of its nodes. Sorting all of a branch's nodes by pseudotime is not a
+path: on the five-branch tree Branch 2 also holds an island of two nodes beside the root, and
+Branch 1 a side twig, and the line drawn through them jumped. Nodes left off a path are
+printed with their sample counts; their samples are still drawn.
 
 Run (project venv):
   venv_TRED_REMIT_analysis/bin/python3 tools/build_tree_map.py
@@ -73,27 +79,66 @@ def _find_root(node_pt, adj, xy):
 
 
 def _fill_branches(branch, adj):
-    """Give every sample-free node the branch of its nearest assigned node; -1 on a tie."""
-    out = list(branch)
-    frontier = deque((n, branch[n]) for n in range(len(branch)) if branch[n] >= 0)
-    seen = {n: branch[n] for n in range(len(branch)) if branch[n] >= 0}
+    """Give every sample-free node the branch of its nearest assigned node; -1 on a tie.
+
+    A tie is two branches arriving at the same graph distance. A node that carries samples
+    is at distance 0 and so always keeps its own branch: comparing branch ids alone, without
+    the distance, greyed both nodes of every edge that joins two branches (on the five-branch
+    tree it took node 103 and its two samples out of Branch 3's path)."""
+    seen = {n: b for n, b in enumerate(branch) if b >= 0}
+    depth = dict.fromkeys(seen, 0)
+    frontier = deque(seen)
     while frontier:
-        n, b = frontier.popleft()
+        n = frontier.popleft()
+        b = seen[n]                      # -1 once n is a tie: what lies beyond it is tied too
         for m in adj[n]:
             if m in seen:
-                if seen[m] != b:
-                    out[m] = -1          # reachable from two branches at equal cost
+                if seen[m] != b and depth[m] == depth[n] + 1:
+                    seen[m] = -1         # reachable from two branches at equal cost
                 continue
             seen[m] = b
-            out[m] = b
-            frontier.append((m, b))
-    return out
+            depth[m] = depth[n] + 1
+            frontier.append(m)
+    return [seen.get(n, -1) for n in range(len(branch))]
+
+
+def _branch_path(members, adj, node_pt):
+    """-> (path, off). path: the graph path from the most proximal to the most distal node of
+    the largest connected part of `members`; off: the members not on it."""
+    member = set(int(n) for n in members)
+    parts, seen = [], set()
+    for n in sorted(member):
+        if n in seen:
+            continue
+        part, stack = set(), [n]
+        while stack:
+            x = stack.pop()
+            if x not in part:
+                part.add(x)
+                stack.extend(m for m in adj[x] if m in member)
+        seen |= part
+        parts.append(part)
+    main = max(parts, key=len)
+    start = min(main, key=lambda n: node_pt[n])
+    end = max(main, key=lambda n: node_pt[n])
+    parent, queue = {start: None}, deque([start])
+    while queue:
+        x = queue.popleft()
+        for m in adj[x]:
+            if m in main and m not in parent:
+                parent[m] = x
+                queue.append(m)
+    path = [end]
+    while parent[path[-1]] is not None:
+        path.append(parent[path[-1]])
+    path = [int(n) for n in reversed(path)]
+    return path, sorted(member - set(path))
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho_fixed/All_Visits")
+    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho_datelink/All_Visits")
     ap.add_argument("--out", default="data/tree.json")
     args = ap.parse_args(argv)
 
@@ -134,6 +179,9 @@ def main(argv=None) -> int:
     node_branch = np.full(n_nodes, -1, dtype=int)
     for node, sub in smp.groupby("node_id"):
         node_branch[int(node)] = int(sub["branch_id"].mode().iloc[0])
+        if sub["branch_id"].nunique() > 1:
+            print(f"  node {int(node)} mixes branches "
+                  f"{sub['branch_id'].value_counts().to_dict()}: majority vote used")
     n_seeded = int((node_branch >= 0).sum())
     node_branch = np.array(_fill_branches(node_branch.tolist(), adj))
     print(f"branch ids: {n_seeded} nodes from samples -> "
@@ -149,7 +197,10 @@ def main(argv=None) -> int:
     branches = {}
     for b in branch_ids:
         members = np.where(node_branch == b)[0]
-        path = members[np.argsort(node_pt[members])].tolist()   # proximal -> distal
+        path, off = _branch_path(members, adj, node_pt)          # proximal -> distal
+        if off:
+            n_off = int(smp["node_id"].isin(off).sum())
+            print(f"  Branch_{b}: nodes off the path {off} ({n_off} samples)")
         r = st.loc[b]
         branches[f"Branch_{b}"] = {
             "id": int(b),

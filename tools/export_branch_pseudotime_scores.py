@@ -93,7 +93,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--phase", required=True, choices=["ED", "ES"])
-    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho_fixed/All_Visits")
+    ap.add_argument("--tree_dir", default=f"{_BASE}/DDRTree_EDES_ortho_datelink/All_Visits")
     ap.add_argument("--pca_csv", default=None, help="defaults to PCA_<phase>/PCA.csv")
     ap.add_argument("--n_knots", type=int, default=3,
                     help="knots per branch, evenly spaced across --span (odd keeps a midpoint)")
@@ -106,7 +106,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     pca_csv = args.pca_csv or f"{_BASE}/PCA_{args.phase}/PCA.csv"
-    out_csv = args.out_csv or f"{_BASE}/DDRTree_EDES_ortho_fixed/branch_pt_{args.phase}_scores.csv"
+    out_csv = args.out_csv or f"{_BASE}/DDRTree_EDES_ortho_datelink/branch_pt_meshes/branch_pt_{args.phase}_scores.csv"
     out_json = args.out_json or out_csv.replace(".csv", "_knots.json")
     span = [float(x) for x in args.span.split(",")]
 
