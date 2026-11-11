@@ -39,7 +39,12 @@ midpoint shape).
 
 It is a single static page (Three.js, no build step) and runs on GitHub Pages.
 
-## The Bonsai view
+## The Bonsai view (removed in build 11)
+
+Build 11 (2026-11-11) removes this view: the Bonsai analysis stays in the paper's supplement but
+no longer needs a viewer. Its files are gone from `data/`, so the page keeps the view hidden; the
+page code and the `tools/*bonsai*` scripts stay, tagged LEGACY-UNUSED, until the repository is made
+public. The description below is the record of build 10.
 
 **Bonsai** shows a second tree, reconstructed by Bonsai (de Groot et al., Nature Biotechnology
 2026) from the same 232 scans and the same 53 shape features (`[PC_ED | ES-perp]`, adjusted for
@@ -145,7 +150,7 @@ branch count, membership and pseudotime all move. Three things have to be rebuil
 
 ```bash
 venv_TRED_REMIT_analysis/bin/python3 tools/build_tree_map.py
-# --tree_dir defaults to DDRTree_EDES_ortho_fixed/All_Visits
+# --tree_dir defaults to DDRTree_EDES_ortho_datelink/All_Visits
 ```
 
 **2. The branch score knots** — one PC-score row per branch per pseudotime knot:
@@ -184,6 +189,13 @@ python3 shape_analysis/shoot_branch_mean_shapes.py \
     --output_folder       /path/to/ES_SSM/PCA/branch_pt_shapes
 ```
 
+The analysis machine can shoot too (Quadro M4000, conda env `deformetrica`, deformetrica 4.3.0), but
+its KeOps kernel does not build there: the run fails inside deformetrica and the wrapper still prints
+"Shooting completed", so count the meshes. Copy the run's `XML_files/` with
+`<kernel-type>torch</kernel-type>` in place of `keops` and run `deformetrica compute` on the copy
+(`-p` its `optimization_parameters.xml`, `-o` a new output folder). Build 11 was shot this way; the
+torch shooting of the mean momenta matches the cluster's KeOps shooting to 1.6e-5 mm.
+
 Copy the endpoint (`tp_10`) meshes to one folder, then convert, passing the knots JSON so
 each `Shooting_<i>` file is tied back to its branch and pseudotime:
 
@@ -202,7 +214,7 @@ they only need rebuilding when the SSM itself changes, not when the tree is refi
 
 Finally commit `data/ED.json`, `data/ES.json`, `data/tree.json` and `data/manifest.json`.
 
-## Rebuilding the Bonsai data
+## Rebuilding the Bonsai data (LEGACY-UNUSED since build 11)
 
 The Bonsai analysis lives in `TRED_REMIT_analysis/bonsai/` (outputs under
 `Bonsai_EDES_ortho/`). Three steps, all non-destructive:
@@ -225,6 +237,22 @@ Built on 2026-09-30: shot on gpu-422 in `TRED_REMIT_SSM{,_ES}/PCA/bonsai_clade_s
 component (297 ED, 296 ES). With every component the reconstructed momenta of each clade equal the
 mean of its members' momenta to within 1e-14 at both phases, so the refitted PCA basis matched the
 scores. Both templates match the viewer's mean shapes exactly.
+
+## State of the data: the five-branch tree, 2026-11-11 (build 11)
+
+Build 11 carries the shape models rebuilt in November 2026 (25 PCs at each phase) and the combined
+tree refitted on the reworked data (`DDRTree_EDES_ortho_datelink/`: 238 scans from 116 patients,
+five branches of 33, 58, 47, 52 and 48 scans, refinement cell 20 / 0.05). The mode sweeps are the
+cluster shootings of the new models (`PCA_{ED,ES}/modes_interpretation/shooting_25_Components/`).
+The branch shapes are 17 ES shootings (the template, three pseudotime knots per branch, and the mean
+of the 238 scans) of `branch_pt_meshes/branch_pt_ES_scores.csv`, shot on the analysis machine with
+the torch kernel (`branch_pt_meshes/local_shooting/shooting_277_Components/output_torch/`).
+
+The minimap draws each branch as the graph path from its most proximal to its most distal node.
+Branch 1 has a side arm (nodes 20, 55 and 74, holding 21 of its 58 scans) that lies off the drawn
+path; its scans still shape the branch, because the knots are fitted on all members. The partition
+is fragile (leaving out 10% of the scans gives a median adjusted Rand index of 0.37 against the full
+fit), so the branches are regions of a map of shape space, not subtypes.
 
 ## State of the data: the three-branch tree, 2026-09-26
 

@@ -28,12 +28,7 @@
         22,
         23,
         24,
-        25,
-        26,
-        27,
-        28,
-        29,
-        30
+        25
       ],
       "n_sd": 3.0
     },
@@ -43,7 +38,9 @@
         "Branch_0",
         "Branch_1",
         "Branch_2",
-        "cohort_mean_232"
+        "Branch_3",
+        "Branch_4",
+        "cohort_mean_238"
       ],
       "modes": [
         1,
@@ -68,7 +65,9 @@
         20,
         21,
         22,
-        23
+        23,
+        24,
+        25
       ],
       "n_sd": 3.0,
       "branch_source": "shot"
@@ -95,37 +94,5 @@
     "step": 0.05,
     "default": 1.0
   },
-  "title": "TRED / REMIT cardiac SSM viewer",
-  "tags": [
-    "LV_endo",
-    "RV_FW",
-    "RV_septum",
-    "aorta_valve",
-    "epi",
-    "mitral_valve",
-    "pulmonary_valve",
-    "tricuspid_valve"
-  ],
-  "bonsai": {
-    "ES": [
-      "C1",
-      "C2",
-      "C3",
-      "C4",
-      "C5",
-      "C6",
-      "C7",
-      "cohort_mean_232"
-    ],
-    "ED": [
-      "C1",
-      "C2",
-      "C3",
-      "C4",
-      "C5",
-      "C6",
-      "C7",
-      "cohort_mean_232"
-    ]
-  }
+  "title": "TRED / REMIT cardiac SSM viewer"
 }

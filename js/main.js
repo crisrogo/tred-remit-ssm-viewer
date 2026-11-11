@@ -53,6 +53,8 @@ const TAG_NAMES = {
 
 let manifest, tree, ramp;
 const phaseCache = {};
+// LEGACY-UNUSED (2026-11-11): the Bonsai view left the viewer and data/ holds no bonsai*.json, so
+// `bonsai` stays null and every Bonsai branch below is dead. Remove before the repository is public.
 let bonsai = null;           // the Bonsai tree map (bonsai.json), or null if not built
 const bonsaiCache = {};      // phase -> clade meshes (bonsai_<PHASE>.json)
 let bonsaiColourBy = 'clade';
