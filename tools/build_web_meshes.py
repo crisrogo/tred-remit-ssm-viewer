@@ -199,7 +199,7 @@ def build_phase(phase, branch_dir, mode_dir, out_dir, scale=20, n_sd=3.0, branch
     # Merge manifest (keep the other phase; scaffold both known phases).
     man_path = os.path.join(out_dir, "manifest.json")
     manifest = {"phases": {}, "colormap": _CMAP,
-                "slider": {"min": 0, "max": 3, "step": 0.05, "default": 1.0},
+                "slider": {"min": 0, "max": n_sd, "step": 0.05, "default": 1.0},
                 "title": "TRED / REMIT cardiac SSM viewer"}
     if os.path.exists(man_path):
         with open(man_path) as fh:
@@ -217,7 +217,7 @@ def build_phase(phase, branch_dir, mode_dir, out_dir, scale=20, n_sd=3.0, branch
     elif "branch_source" in keep:
         manifest["phases"][phase]["branch_source"] = keep["branch_source"]
     manifest["colormap"] = _CMAP
-    manifest["slider"] = {"min": 0, "max": 3, "step": 0.05, "default": 1.0}
+    manifest["slider"] = {"min": 0, "max": n_sd, "step": 0.05, "default": 1.0}
     with open(man_path, "w") as fh:
         json.dump(manifest, fh, indent=2)
     print(f"  wrote {man_path}")

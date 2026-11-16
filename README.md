@@ -12,7 +12,7 @@ two views differ in whether a phase has to be chosen at all:
 - **DDRTree** shapes are always drawn end-systolic, so there is no phase toggle. A minimap
   of the tree shows which branch is selected and where on it you are; click or drag to move.
 - **Modes** belong to one phase's own PCA, so ED and ES are separate models and the phase
-  toggle appears. The slider sweeps -3 SD .. mean .. +3 SD.
+  toggle appears. The slider sweeps -2 SD .. mean .. +2 SD (build 12; -3 to +3 SD until build 11).
 
 Two things could vary in the tree view, but a **Vary** toggle exposes only one at a time:
 
